@@ -3,9 +3,10 @@
 // Port simplificat dupa process_verbal_details_screen.dart: pastreaza
 // fluxul esential (client/beneficiar, produse din catalog, poza de
 // confirmare cu poarta GPS, semnatura beneficiarului, generare document,
-// salvare in istoric). Nu include importul din WhatsApp (scop MVP).
+// salvare in istoric). Include si un import rapid din text WhatsApp
+// (whatsapp-import.js) — completare aproximativa, de verificat manual.
 
-import { el, uuid, formatDateTimeRo, blobToDataUrl } from './utils.js';
+import { el, uuid, formatDateTimeRo, blobToDataUrl, withoutDiacritics } from './utils.js';
 import { pushScreen } from './router.js';
 import { CatalogRepo, PvRepo, ClientLocationRepo } from './db.js';
 import {
@@ -27,6 +28,7 @@ import { DEFAULT_PRODUCT_CATALOG, DEFAULT_AUXILIARY_BY_CATEGORY } from './catalo
 import { annotatePhotoWithMetadata } from './photo-annotate.js';
 import { nextPvNumber, nextAvizNumber, prefixForType, displayPvNumber, displayAvizNumber } from './pv-numbering.js';
 import { buildDocumentHtml, openPrintPreview } from './pdf-print.js';
+import { openWhatsAppImportDialog } from './whatsapp-import.js';
 
 const NA = 'N/A';
 const NEEDS_AVIZ = new Set(['AMPLASARE', 'RIDICARE', 'VANZARE']);
@@ -180,6 +182,7 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
     // ---------------- render ----------------
     function render() {
       bodyHost.innerHTML = '';
+      bodyHost.appendChild(el('div', { style: 'margin-bottom:10px' }, [outlineButton('📋 Importa din WhatsApp', onImportFromWhatsApp)]));
       bodyHost.appendChild(renderBeneficiarySection());
       if (processType === 'VANZARE') bodyHost.appendChild(renderFinancialSection());
       bodyHost.appendChild(renderConfirmationSection());
@@ -416,6 +419,75 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
       children.push(photoBtn, secureRow, photosHost);
 
       return sectionCard('Detalii produs si poza de confirmare', children);
+    }
+
+    // ---------------- import din WhatsApp ----------------
+    async function onImportFromWhatsApp() {
+      const parsed = await openWhatsAppImportDialog();
+      if (!parsed) return;
+      applyWhatsAppImport(parsed);
+    }
+
+    function applyWhatsAppImport(parsed) {
+      let anyField = false;
+      if (parsed.clientName) {
+        state.clientName = parsed.clientName;
+        missing.delete('clientName');
+        anyField = true;
+      }
+      const addressParts = [];
+      if (parsed.jud) addressParts.push(`Jud. ${parsed.jud.toUpperCase()}`);
+      if (parsed.loc) addressParts.push(parsed.loc);
+      if (parsed.str) addressParts.push(parsed.str);
+      if (addressParts.length) {
+        state.field1 = addressParts.join(', ');
+        missing.delete('field1');
+        anyField = true;
+      }
+      if (parsed.persRes) {
+        state.beneficiaryResponsible = parsed.persRes;
+        missing.delete('beneficiaryResponsible');
+        anyField = true;
+      }
+      if (parsed.tel) {
+        state.beneficiaryPhone = parsed.tel;
+        missing.delete('beneficiaryPhone');
+        anyField = true;
+      }
+      if (parsed.ctr) {
+        state.contractReference = parsed.ctr;
+        anyField = true;
+      }
+      if (parsed.servisare) {
+        const note = `Servisare: ${parsed.servisare}`;
+        state.observatii = state.observatii.trim() ? `${state.observatii.trim()}\n${note}` : note;
+        anyField = true;
+      }
+      if (parsed.productQty && parsed.productQty > 0) {
+        state.productQuantity = String(parsed.productQty);
+        const first = state.productEntries[0];
+        while (first.series.length < parsed.productQty) first.series.push('');
+        while (first.series.length > parsed.productQty) first.series.pop();
+        anyField = true;
+      }
+      if (parsed.productText) {
+        const upperText = withoutDiacritics(parsed.productText).toUpperCase();
+        const matchedModel = savedModels.find((m) => upperText.includes(withoutDiacritics(m).toUpperCase()));
+        const first = state.productEntries[0];
+        if (matchedModel) {
+          first.model = matchedModel;
+          const types = catalogByModel[matchedModel] || [];
+          const remainder = upperText.replace(withoutDiacritics(matchedModel).toUpperCase(), '').trim();
+          const matchedType = types.find((t) => remainder.includes(withoutDiacritics(t).toUpperCase()));
+          if (matchedType) first.type = matchedType;
+        } else {
+          first.model = parsed.productText;
+        }
+        missing.delete('productDetails');
+        anyField = true;
+      }
+      render();
+      showToast(anyField ? 'Date importate — verifica si completeaza ce lipseste.' : 'Nu am recunoscut niciun camp in textul lipit.');
     }
 
     // ---------------- photo capture flow ----------------

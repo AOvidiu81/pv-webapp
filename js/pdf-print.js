@@ -14,11 +14,14 @@ import {
   weekdayLabelRo,
   displayOrNa,
   withoutDiacritics,
+  fileToken,
 } from './utils.js';
 import { CONDITIONS_BY_TYPE, COMPANY_INFO, confirmationBanner } from './catalog-defaults.js';
 import { displayPvNumber, displayAvizNumber } from './pv-numbering.js';
 import { pushScreen } from './router.js';
 import { el } from './utils.js';
+import { showToast } from './components.js';
+import { generateDocumentPdfBlob, shareOrDownloadPdf } from './pdf-generate.js';
 
 const NA = 'N/A';
 
@@ -464,6 +467,35 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     requestAnimationFrame(applyScale);
     window.addEventListener('resize', applyScale);
 
+    const fileNameBase = suggestedFileName || fileToken(title) || 'Proces-Verbal';
+    const shareBtn = el(
+      'button',
+      { class: 'btn btn-block btn-outline' },
+      ['📤  Trimite (WhatsApp / alta aplicatie)']
+    );
+    let shareBusy = false;
+    shareBtn.addEventListener('click', async () => {
+      if (shareBusy) return;
+      shareBusy = true;
+      const originalLabel = shareBtn.textContent;
+      shareBtn.textContent = 'Se pregateste PDF-ul...';
+      shareBtn.disabled = true;
+      try {
+        const blob = await generateDocumentPdfBlob(html);
+        const result = await shareOrDownloadPdf(blob, fileNameBase, { title: fileNameBase });
+        if (result === 'downloaded') {
+          showToast('PDF descarcat — il poti trimite din notificarea de descarcare sau din Fisiere.');
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Nu am putut genera PDF-ul: ' + e.message, { danger: true });
+      } finally {
+        shareBusy = false;
+        shareBtn.textContent = originalLabel;
+        shareBtn.disabled = false;
+      }
+    });
+
     const bottomBar = el('div', { class: 'preview-bottom-bar' }, [
       el(
         'button',
@@ -476,6 +508,7 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
         },
         ['🖨  Printeaza / Salveaza ca PDF']
       ),
+      shareBtn,
     ]);
     screen.appendChild(bottomBar);
 

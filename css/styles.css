@@ -304,7 +304,7 @@ select.field-input { appearance: none; background-image: linear-gradient(45deg, 
 .preview-pages { display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .preview-page-frame { position: relative; overflow: hidden; box-shadow: var(--shadow-elevated); border-radius: 2px; }
 .preview-page-frame .doc-page { position: absolute; top: 0; left: 0; }
-.preview-bottom-bar { padding: 12px 14px calc(12px + var(--safe-bottom)); background: #fff; border-top: 1px solid var(--border); flex-shrink: 0; }
+.preview-bottom-bar { padding: 12px 14px calc(12px + var(--safe-bottom)); background: #fff; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
 
 /* Setup / onboarding */
 .setup-progress { display: flex; gap: 6px; padding: 0 4px 16px; }
