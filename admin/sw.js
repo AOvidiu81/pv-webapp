@@ -5,7 +5,7 @@
 // (HTML/CSS/JS/imagini) pentru o incarcare rapida — NU ofera functionare
 // offline pentru datele de administrare.
 
-const CACHE_VERSION = 'pv-euro-ecologic-admin-v2';
+const CACHE_VERSION = 'pv-euro-ecologic-admin-v3';
 const APP_SHELL = [
   './',
   'index.html',
@@ -14,10 +14,10 @@ const APP_SHELL = [
   'manifest.json',
   '../assets/logo/euro_ecologic_logo.png',
   '../assets/logo/euro_ecologic_mark.png',
-  '../icons/icon-192.png',
-  '../icons/icon-512.png',
-  '../icons/maskable-192.png',
-  '../icons/maskable-512.png',
+  '../icons/admin-icon-192.png',
+  '../icons/admin-icon-512.png',
+  '../icons/admin-maskable-192.png',
+  '../icons/admin-maskable-512.png',
 ];
 
 self.addEventListener('install', (event) => {
