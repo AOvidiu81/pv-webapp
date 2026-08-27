@@ -5,7 +5,7 @@
 // (HTML/CSS/JS/imagini) pentru o incarcare rapida — NU ofera functionare
 // offline pentru datele de administrare.
 
-const CACHE_VERSION = 'pv-euro-ecologic-admin-v3';
+const CACHE_VERSION = 'pv-euro-ecologic-admin-v4';
 const APP_SHELL = [
   './',
   'index.html',
@@ -34,23 +34,23 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  // Niciodata nu cachuim cereri catre Supabase (date live de administrare) —
-  // doar coaja statica a paginii. Am avut deja o problema cu raspunsuri
-  // vechi cachuite intre client si Supabase; nu vrem sa adaugam un al doilea
-  // strat de cache peste date care trebuie sa fie mereu proaspete.
+  // Niciodata nu cachuim cereri catre Supabase (date live de administrare).
   if (event.request.url.includes('supabase.co')) return;
+  // NETWORK-FIRST (nu cache-first): admin-ul are oricum nevoie de internet
+  // ca sa functioneze, asa ca preferam mereu ultima versiune de pe server.
+  // Cache-ul e doar o plasa de siguranta pentru cazul rar cand chiar nu e
+  // semnal deloc. (Am avut o problema reala cu cache-first: butoane noi
+  // aparute intr-un update nu functionau pana la un refresh fortat, pentru
+  // ca pagina veche cachuita ramanea servita la nesfarsit.)
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
-            const clone = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
+          const clone = response.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
