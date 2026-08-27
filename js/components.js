@@ -1,0 +1,399 @@
+// components.js — elemente UI reutilizabile: toast, modal de confirmare,
+// bottom-sheet de selectie, camp de text, semnatura pe canvas, poarta GPS.
+
+import { el } from './utils.js';
+import { pushScreen } from './router.js';
+
+// ------------------------------------------------------------------
+// Toast
+// ------------------------------------------------------------------
+let toastTimer = null;
+export function showToast(message, { danger = false } = {}) {
+  let host = document.getElementById('toast-host');
+  if (!host) {
+    host = el('div', { id: 'toast-host' });
+    document.body.appendChild(host);
+  }
+  host.innerHTML = '';
+  const toast = el('div', { class: `toast${danger ? ' toast-danger' : ''}` }, [message]);
+  host.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast-show'));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('toast-show');
+    setTimeout(() => toast.remove(), 200);
+  }, 3200);
+}
+
+// ------------------------------------------------------------------
+// Modal generic (folosit si pentru bottom sheets)
+// ------------------------------------------------------------------
+export function openModal({ title, bodyNode, actions = [], sheet = false }) {
+  return new Promise((resolve) => {
+    const overlay = el('div', { class: `modal-overlay${sheet ? ' modal-overlay-sheet' : ''}` });
+    const card = el('div', { class: sheet ? 'sheet-card' : 'modal-card' });
+    if (title) card.appendChild(el('div', { class: 'modal-title' }, [title]));
+    const body = el('div', { class: 'modal-body' }, [bodyNode]);
+    card.appendChild(body);
+    if (actions.length) {
+      const actionsRow = el('div', { class: 'modal-actions' });
+      for (const action of actions) {
+        const btn = el(
+          'button',
+          {
+            class: `btn ${action.primary ? 'btn-primary' : 'btn-text'}`,
+            onclick: () => {
+              close(action.value);
+            },
+          },
+          [action.label]
+        );
+        actionsRow.appendChild(btn);
+      }
+      card.appendChild(actionsRow);
+    }
+    overlay.appendChild(card);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close(undefined);
+    });
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('modal-show'));
+
+    function close(result) {
+      overlay.classList.remove('modal-show');
+      setTimeout(() => overlay.remove(), 180);
+      resolve(result);
+    }
+    overlay.__close = close;
+  });
+}
+
+export async function confirmDialog({ title, message, okLabel = 'OK', cancelLabel = 'Anuleaza', danger = false }) {
+  const body = el('div', { class: 'modal-message' }, [message]);
+  return openModal({
+    title,
+    bodyNode: body,
+    actions: [
+      { label: cancelLabel, value: false },
+      { label: okLabel, value: true, primary: !danger, danger },
+    ],
+  });
+}
+
+export async function pickFromList({ title, values, renderLabel }) {
+  const list = el('div', { class: 'pick-list' });
+  if (!values.length) {
+    list.appendChild(el('div', { class: 'pick-empty' }, ['Nicio optiune disponibila.']));
+  }
+  return openModal({
+    title,
+    sheet: true,
+    bodyNode: (() => {
+      values.forEach((value) => {
+        const item = el('button', { class: 'pick-item', onclick: () => overlayClose(value) }, [renderLabel ? renderLabel(value) : String(value)]);
+        list.appendChild(item);
+      });
+      return list;
+    })(),
+  });
+
+  function overlayClose(value) {
+    const overlay = document.querySelector('.modal-overlay-sheet.modal-show');
+    if (overlay && overlay.__close) overlay.__close(value);
+  }
+}
+
+export async function pickMultiFromList({ title, values, selected }) {
+  const chosen = new Set(selected);
+  const list = el('div', { class: 'pick-list' });
+  values.forEach((value) => {
+    const row = el('label', { class: 'pick-check-row' });
+    const checkbox = el('input', { type: 'checkbox' });
+    checkbox.checked = chosen.has(value);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) chosen.add(value);
+      else chosen.delete(value);
+    });
+    row.appendChild(checkbox);
+    row.appendChild(el('span', {}, [value]));
+    list.appendChild(row);
+  });
+  const result = await openModal({
+    title,
+    sheet: true,
+    bodyNode: list,
+    actions: [
+      { label: 'Anuleaza', value: null },
+      { label: 'Salveaza', value: 'save', primary: true },
+    ],
+  });
+  return result === 'save' ? Array.from(chosen) : null;
+}
+
+// ------------------------------------------------------------------
+// Camp de text cu label + mesaj de eroare optional
+// ------------------------------------------------------------------
+export function textField({ label, value = '', required = false, type = 'text', placeholder, readOnly = false, onInput, errorText }) {
+  const wrapper = el('div', { class: 'field' });
+  const inputAttrs = { class: `field-input${errorText ? ' field-input-error' : ''}`, type, placeholder: placeholder || '' };
+  if (readOnly) inputAttrs.readonly = true;
+  const input = el('input', inputAttrs);
+  input.value = value;
+  if (onInput) input.addEventListener('input', () => onInput(input.value));
+  wrapper.appendChild(el('label', { class: 'field-label' }, [label + (required ? ' *' : '')]));
+  wrapper.appendChild(input);
+  if (errorText) wrapper.appendChild(el('div', { class: 'field-error' }, [errorText]));
+  wrapper.input = input;
+  return wrapper;
+}
+
+export function textAreaField({ label, value = '', placeholder, onInput, rows = 3 }) {
+  const wrapper = el('div', { class: 'field' });
+  const textarea = el('textarea', { class: 'field-input', rows: String(rows), placeholder: placeholder || '' });
+  textarea.value = value;
+  if (onInput) textarea.addEventListener('input', () => onInput(textarea.value));
+  if (label) wrapper.appendChild(el('label', { class: 'field-label' }, [label]));
+  wrapper.appendChild(textarea);
+  wrapper.input = textarea;
+  return wrapper;
+}
+
+export function selectField({ label, value, options, onChange }) {
+  const wrapper = el('div', { class: 'field' });
+  const select = el('select', { class: 'field-input' });
+  options.forEach((opt) => {
+    const optionEl = el('option', { value: opt.value || opt }, [opt.label || opt]);
+    if ((opt.value || opt) === value) optionEl.selected = true;
+    select.appendChild(optionEl);
+  });
+  if (onChange) select.addEventListener('change', () => onChange(select.value));
+  if (label) wrapper.appendChild(el('label', { class: 'field-label' }, [label]));
+  wrapper.appendChild(select);
+  wrapper.input = select;
+  return wrapper;
+}
+
+export function sectionCard(titleText, children = []) {
+  const card = el('div', { class: 'section-card' });
+  if (titleText) card.appendChild(el('h3', { class: 'section-title' }, [titleText]));
+  children.forEach((c) => c && card.appendChild(c));
+  return card;
+}
+
+export function primaryButton(label, onClick, { icon, disabled = false, danger = false } = {}) {
+  return el(
+    'button',
+    {
+      class: `btn btn-block ${danger ? 'btn-danger' : 'btn-primary'}`,
+      onclick: onClick,
+      disabled: disabled || undefined,
+    },
+    [icon ? el('span', { class: 'btn-icon' }, [icon]) : null, label]
+  );
+}
+
+export function outlineButton(label, onClick, { icon, disabled = false, error = false } = {}) {
+  return el(
+    'button',
+    {
+      class: `btn btn-block btn-outline${error ? ' btn-outline-error' : ''}`,
+      onclick: onClick,
+      disabled: disabled || undefined,
+    },
+    [icon ? el('span', { class: 'btn-icon' }, [icon]) : null, label]
+  );
+}
+
+// ------------------------------------------------------------------
+// Signature pad (canvas) — ecran complet, folosit prin pushScreen()
+// ------------------------------------------------------------------
+export async function captureSignature({ title = 'Semnatura' } = {}) {
+  return pushScreen(({ pop }) => {
+    const canvasWrap = el('div', { class: 'signature-canvas-wrap' });
+    const canvas = el('canvas', { class: 'signature-canvas' });
+    canvasWrap.appendChild(canvas);
+
+    const screen = el('div', { class: 'signature-screen' });
+    const topBar = el('div', { class: 'topbar' }, [
+      el('button', { class: 'icon-btn', onclick: () => pop(undefined) }, ['←']),
+      el('div', { class: 'topbar-title' }, [title]),
+      el('div', { class: 'topbar-spacer' }),
+    ]);
+    const clearBtn = el('button', { class: 'sig-side-btn sig-clear', onclick: () => clear() }, ['⟲']);
+    const okBtn = el('button', { class: 'sig-side-btn sig-ok', onclick: () => save() }, ['✓']);
+    const row = el('div', { class: 'signature-row' }, [clearBtn, canvasWrap, okBtn]);
+    screen.appendChild(topBar);
+    screen.appendChild(row);
+    screen.appendChild(el('div', { class: 'signature-hint' }, ['Semneaza in chenar folosind degetul sau stylus-ul.']));
+
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
+    let hasStrokes = false;
+    let last = null;
+
+    function resize() {
+      const rect = canvasWrap.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.scale(ratio, ratio);
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#1B2F6B';
+    }
+    requestAnimationFrame(resize);
+
+    function pointFromEvent(e) {
+      const rect = canvas.getBoundingClientRect();
+      const point = e.touches ? e.touches[0] : e;
+      return { x: point.clientX - rect.left, y: point.clientY - rect.top };
+    }
+    function start(e) {
+      e.preventDefault();
+      drawing = true;
+      last = pointFromEvent(e);
+    }
+    function move(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      const p = pointFromEvent(e);
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      last = p;
+      hasStrokes = true;
+    }
+    function end(e) {
+      drawing = false;
+    }
+    canvas.addEventListener('pointerdown', start);
+    canvas.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+
+    function clear() {
+      const rect = canvasWrap.getBoundingClientRect();
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      hasStrokes = false;
+    }
+
+    function save() {
+      if (!hasStrokes) {
+        showToast('Semneaza in chenar inainte de validare.');
+        return;
+      }
+      canvas.toBlob((blob) => pop(blob), 'image/png');
+    }
+
+    return screen;
+  });
+}
+
+// ------------------------------------------------------------------
+// Poarta GPS: cere o pozitie precisa inainte de a permite poza de
+// confirmare. Port din gps_accuracy_gate_screen.dart.
+// ------------------------------------------------------------------
+export async function gpsAccuracyGate() {
+  const THRESHOLD = 20;
+  return pushScreen(({ pop }) => {
+    const screen = el('div', { class: 'gps-screen' });
+    const topBar = el('div', { class: 'topbar topbar-dark' }, [
+      el('button', { class: 'icon-btn icon-btn-light', onclick: () => pop(undefined) }, ['←']),
+      el('div', { class: 'topbar-title topbar-title-light' }, ['Verificare Locatie GPS']),
+    ]);
+    const ring = el('div', { class: 'gps-ring gps-ring-loading' });
+    const ringLabel = el('div', { class: 'gps-ring-label' }, ['GPS...']);
+    ring.appendChild(ringLabel);
+    const coordsBox = el('div', { class: 'gps-coords', style: 'display:none' });
+    const status = el('div', { class: 'gps-status' }, ['Se cauta semnal GPS...']);
+    const actionBtn = el('button', { class: 'btn btn-block gps-action-btn', disabled: true }, ['Asteptam precizie GPS...']);
+    const skipBtn = el('button', { class: 'btn btn-text gps-skip' }, ['Sari peste verificare GPS']);
+    skipBtn.addEventListener('click', () => pop('skip'));
+
+    screen.appendChild(topBar);
+    const content = el('div', { class: 'gps-content' }, [ring, coordsBox, status, el('div', { class: 'gps-spacer' }), actionBtn, skipBtn]);
+    screen.appendChild(content);
+
+    let watchId = null;
+    let bestPosition = null;
+
+    function colorFor(accuracy) {
+      if (accuracy <= THRESHOLD) return '#2E7D32';
+      if (accuracy <= 50) return '#F57F17';
+      return '#C62828';
+    }
+    function labelFor(accuracy) {
+      if (accuracy <= THRESHOLD) return 'EXCELENT';
+      if (accuracy <= 50) return 'MEDIU';
+      return 'SLAB';
+    }
+
+    function onPosition(position) {
+      bestPosition = position;
+      const accuracy = position.coords.accuracy;
+      const color = colorFor(accuracy);
+      ring.classList.remove('gps-ring-loading');
+      ring.style.borderColor = color;
+      ring.style.background = color + '1a';
+      ring.innerHTML = '';
+      ring.appendChild(el('div', { class: 'gps-ring-value', style: `color:${color}` }, [`± ${accuracy.toFixed(0)} m`]));
+      ring.appendChild(el('div', { class: 'gps-ring-label', style: `color:${color}` }, [labelFor(accuracy)]));
+
+      coordsBox.style.display = '';
+      coordsBox.innerHTML = '';
+      coordsBox.appendChild(el('div', {}, [`LAT: ${position.coords.latitude.toFixed(6)}`]));
+      coordsBox.appendChild(el('div', {}, [`LNG: ${position.coords.longitude.toFixed(6)}`]));
+
+      const goodEnough = accuracy <= THRESHOLD;
+      status.textContent =
+        accuracy <= THRESHOLD ? 'Locatia este precisa! Poti face poza.' : accuracy <= 50 ? 'Precizie medie. Asteapta imbunatatire...' : 'Semnal slab. Mergi la spatiu deschis...';
+      status.style.color = goodEnough ? '#81C784' : '#FFB74D';
+
+      actionBtn.disabled = !goodEnough;
+      actionBtn.textContent = goodEnough ? 'ADAUGA FOTO — Locatia este in parametri' : 'Asteptam precizie GPS...';
+      actionBtn.classList.toggle('gps-action-ready', goodEnough);
+      actionBtn.onclick = goodEnough ? () => stopAndPop(position) : null;
+    }
+
+    function onError() {
+      status.textContent = 'Eroare GPS. Verifica permisiunile.';
+    }
+
+    function stopAndPop(position) {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      pop(position);
+    }
+
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(onPosition, onError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15000,
+      });
+    } else {
+      status.textContent = 'GPS indisponibil pe acest dispozitiv.';
+    }
+
+    return screen;
+  });
+}
+
+// ------------------------------------------------------------------
+// Camera: input file cu capture="environment" — cea mai fiabila metoda
+// de a deschide direct camera din Chrome pe Android intr-un PWA.
+// ------------------------------------------------------------------
+export function captureCameraPhoto() {
+  return new Promise((resolve) => {
+    const input = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none' });
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      input.remove();
+      resolve(file || null);
+    });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
