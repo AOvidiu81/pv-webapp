@@ -9,6 +9,7 @@ import { DriverRepo, CarRepo, DepotRepo } from './db.js';
 import { textField, primaryButton, outlineButton, sectionCard, confirmDialog, showToast, captureSignature } from './components.js';
 import { DEFAULT_DEPOT } from './catalog-defaults.js';
 import { blobToDataUrl } from './utils.js';
+import { getCurrentProfile, signOut } from './auth.js';
 
 function topBar(title, onBack) {
   return el('div', { class: 'topbar' }, [
@@ -352,7 +353,26 @@ export async function openSettingsScreen() {
     refreshCars();
     refreshDepots();
 
+    const accountHost = el('div', {});
+    (async () => {
+      const profile = await getCurrentProfile();
+      if (!profile) return; // aplicatie fara login configurat (versiune veche/offline la prima rulare)
+      accountHost.appendChild(
+        sectionCard('Cont', [
+          el('div', { style: 'margin-bottom:10px;color:var(--ink-soft);font-size:13.5px' }, [
+            `Autentificat ca `, el('strong', {}, [profile.full_name || profile.username]),
+          ]),
+          outlineButton('Deconectare', async () => {
+            if (!(await confirmDialog({ title: 'Deconectare', message: 'Iesi din cont pe acest telefon?', okLabel: 'Deconecteaza-ma' }))) return;
+            await signOut();
+            location.reload();
+          }),
+        ])
+      );
+    })();
+
     const scroll = el('div', { class: 'screen-scroll' }, [
+      accountHost,
       sectionCard('Soferi', [driversHost, outlineButton('+ Adauga sofer', async () => { await openDriverEditor(null); refreshDrivers(); })]),
       sectionCard('Masini', [carsHost, outlineButton('+ Adauga auto', async () => { await openCarEditor(null); refreshCars(); })]),
       sectionCard('Depozite', [depotsHost, outlineButton('+ Adauga depozit', async () => { await openDepotEditor(null); refreshDepots(); })]),

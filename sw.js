@@ -2,7 +2,7 @@
 // offline completa dupa prima incarcare. La fiecare modificare a
 // aplicatiei, creste CACHE_VERSION ca telefoanele sa preia noua versiune.
 
-const CACHE_VERSION = 'pv-euro-ecologic-v3';
+const CACHE_VERSION = 'pv-euro-ecologic-v4';
 const APP_SHELL = [
   './',
   'index.html',
@@ -20,6 +20,8 @@ const APP_SHELL = [
   'js/pdf-print.js',
   'js/pdf-generate.js',
   'js/whatsapp-import.js',
+  'js/auth.js',
+  'js/screens-login.js',
   'js/screens-setup.js',
   'js/screens-home.js',
   'js/screens-pv-form.js',
@@ -54,7 +56,11 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(event.request)
         .then((response) => {
-          if (response.ok && response.type === 'basic') {
+          // 'basic' = fisierele proprii; 'cors' = libraria supabase-js
+          // incarcata de pe esm.sh (js/auth.js) — o cachuim si pe aceasta
+          // dupa prima incarcare reusita, ca autentificarea/sincronizarea
+          // sa nu depinda strict de cache-ul HTTP nativ al telefonului.
+          if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
             const clone = response.clone();
             caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, clone));
           }
