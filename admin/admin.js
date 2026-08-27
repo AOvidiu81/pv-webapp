@@ -55,6 +55,7 @@ const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
 const loginBtn = document.getElementById('login-btn');
 const topbarUser = document.getElementById('topbar-user');
+const changePasswordBtn = document.getElementById('change-password-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const modalHost = document.getElementById('modal-host');
 
@@ -94,6 +95,43 @@ loginForm.addEventListener('submit', async (e) => {
     loginBtn.disabled = false;
     loginBtn.textContent = 'Intra in cont';
   }
+});
+
+changePasswordBtn.addEventListener('click', async () => {
+  await openModal({
+    title: 'Schimba parola',
+    bodyHtml: `
+      <div class="field"><label>Parola noua</label><input id="cp-pass1" type="password" autocomplete="new-password" /></div>
+      <div class="field"><label>Confirma parola noua</label><input id="cp-pass2" type="password" autocomplete="new-password" /></div>
+      <div class="error-text" id="cp-error"></div>
+    `,
+    actions: [
+      { label: 'Anuleaza', className: 'btn-outline' },
+      {
+        label: 'Salveaza',
+        className: 'btn-primary',
+        onClick: async (backdrop) => {
+          const p1 = backdrop.querySelector('#cp-pass1').value;
+          const p2 = backdrop.querySelector('#cp-pass2').value;
+          const errEl = backdrop.querySelector('#cp-error');
+          if (!p1) {
+            errEl.textContent = 'Introdu parola noua.';
+            return false;
+          }
+          if (p1 !== p2) {
+            errEl.textContent = 'Parolele nu coincid.';
+            return false;
+          }
+          const { error } = await supabase.auth.updateUser({ password: p1 });
+          if (error) {
+            errEl.textContent = error.message;
+            return false;
+          }
+          showToast('Parola a fost schimbata.');
+        },
+      },
+    ],
+  });
 });
 
 logoutBtn.addEventListener('click', async () => {

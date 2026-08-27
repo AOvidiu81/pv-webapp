@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
 <title>Admin — Euro Ecologic PV</title>
+<meta name="theme-color" content="#0b3b66" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="../icons/icon-192.png" />
+<link rel="apple-touch-icon" href="../icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="EE Admin" />
 <link rel="stylesheet" href="admin.css" />
 </head>
 <body>
@@ -34,6 +41,7 @@
     <img src="../assets/logo/euro_ecologic_mark.png" alt="" />
     <div class="topbar-title">Admin Procese Verbale</div>
     <div class="topbar-user" id="topbar-user"></div>
+    <button class="btn btn-sm btn-outline" id="change-password-btn" style="color:#fff;border-color:rgba(255,255,255,0.5)">Schimba parola</button>
     <button class="btn btn-sm btn-outline" id="logout-btn" style="color:#fff;border-color:rgba(255,255,255,0.5)">Iesire</button>
   </div>
 
@@ -95,5 +103,12 @@
 <div id="toast-host" class="toast-host"></div>
 
 <script type="module" src="admin.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>
