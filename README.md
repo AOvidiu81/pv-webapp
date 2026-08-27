@@ -10,6 +10,9 @@ după prima încărcare.
 - Configurare inițială: șoferi, mașini, depozite (stocate local, pe telefon).
 - Selector sofer / auto / depozit → alegere tip P.V. (AMPLASARE, RIDICARE,
   SERVISARE, LIPSA ACCES, VANZARE).
+- Import rapid din WhatsApp: lipești textul comenzii primite (client, adresă,
+  persoană de contact, contract, produs) și formularul se pre-completează
+  automat — verifici și completezi ce nu a fost recunoscut.
 - Formularul complet de proces verbal: date client/beneficiar, catalog de
   produse (model/tip/serii/elemente auxiliare), secțiune financiară pentru
   VANZARE, observații, poartă GPS + poză de confirmare (cu banner de metadate
@@ -17,8 +20,12 @@ după prima încărcare.
 - Generare document: Proces Verbal + Aviz de însoțire (când e cazul) + anexe
   foto, cu conținutul legal păstrat identic cu aplicația Flutter, dar cu un
   aspect vizual nou, mai premium.
+- Trimitere directă a PDF-ului (WhatsApp / email / orice aplicație) chiar din
+  ecranul de previzualizare — fără să mai treci prin „Salvează ca PDF" +
+  Fișiere. Vezi mai jos „Cum trimiți documentul mai departe".
 - Numerotare automată PV / Aviz (contoare persistente, ca în aplicația veche).
-- Istoric documente: redeschidere și retipărire a oricărui PV salvat.
+- Istoric documente: redeschidere, retipărire și retrimitere a oricărui PV
+  salvat.
 - Instalabilă pe Android ca aplicație (Add to Home Screen) și funcțională
   offline (service worker).
 
@@ -29,7 +36,6 @@ după prima încărcare.
 - Ecran de gestiune a catalogului de produse (momentan se editează direct în
   `js/catalog-defaults.js`).
 - Istoric locații client / hartă.
-- Import text din WhatsApp.
 - Depozite de colaborare, parolă de depozit.
 - Sincronizare/cont — datele rămân locale pe fiecare telefon (ai ales această
   variantă în locul unei baze de date centralizate).
@@ -37,12 +43,25 @@ după prima încărcare.
 ## Cum genereză „PDF"-ul
 
 Nu am putut aduce o librărie PDF (jsPDF etc.) pentru că acest mediu de lucru
-nu are acces la internet. În loc de asta, am folosit funcția nativă de
-printare a browserului: la Preview / Salvare se deschide dialogul de
-printare din Chrome, unde alegi „Salvează ca PDF". Este de fapt o soluție mai
-robustă pentru o aplicație 100% offline decât o librărie externă — și permite
-un aspect vizual mult mai elaborat (tabele, tipografie) decât API-ul de
-desenat al unei librării PDF.
+nu are acces la internet. Sunt disponibile două căi, ambele generate local pe
+telefon, fără server:
+
+1. **Printeaza / Salveaza ca PDF** — deschide dialogul nativ de printare al
+   browserului (Chrome → „Salvează ca PDF"). Fișierul ajunge în Descărcări.
+2. **Trimite (WhatsApp / altă aplicație)** — generează un fișier PDF real
+   direct în aplicație (fiecare pagină a documentului e „fotografiată" intern
+   și asamblată într-un PDF, fără nicio librărie externă) și deschide meniul
+   nativ de distribuire al telefonului, unde alegi WhatsApp (sau orice altă
+   aplicație) direct — fără să mai treci prin Descărcări. Dacă telefonul/
+   browserul nu suportă distribuirea directă, PDF-ul se descarcă automat, ca
+   la opțiunea 1.
+
+## Cum trimiți documentul mai departe
+
+Din ecranul de previzualizare (după Preview sau după Genereaza Proces Verbal,
+și din Istoric → Deschide), apasă „📤 Trimite (WhatsApp / altă aplicație)".
+Telefonul îți arată meniul lui de distribuire — alegi contactul sau grupul de
+WhatsApp și documentul pleacă direct ca fișier PDF, fără pași suplimentari.
 
 ## Cum o testezi local pe calculator
 
@@ -89,6 +108,8 @@ js/db.js              — persistență locală (IndexedDB)
 js/app.js              — pornirea aplicației
 js/screens-*.js        — ecranele aplicației
 js/pdf-print.js         — construirea documentului + previzualizare + print
+js/pdf-generate.js       — genereaza PDF-ul real (fara librarie) + trimitere
+js/whatsapp-import.js     — extrage campuri dintr-un text de comanda WhatsApp
 js/photo-annotate.js     — banner cu metadate ars pe poza de confirmare
 js/catalog-defaults.js    — catalogul de produse implicit + info companie
 assets/, icons/          — logo, imagini document, iconițe PWA
