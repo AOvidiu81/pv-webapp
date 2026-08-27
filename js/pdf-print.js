@@ -105,7 +105,8 @@ function docDateTime(iso) {
   };
 }
 
-function runningFooter(model, depotEmail, depotPhone) {
+function runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal) {
+  const pageLabel = pageIndex && pageTotal ? `<div class="doc-footer-page">Pagina ${pageIndex} din ${pageTotal}</div>` : '';
   return `
     <div class="doc-footer">
       <div class="doc-footer-rule"></div>
@@ -118,6 +119,7 @@ function runningFooter(model, depotEmail, depotPhone) {
           <div>Punct de lucru <strong>${esc((model.depotName || '').toUpperCase())}</strong>: ${esc(depotEmail)} / <strong>${esc(depotPhone)}</strong>
             &nbsp;|&nbsp; <strong>${esc((model.depotRepresentativeName || 'RESPONSABIL DEPOZIT').toUpperCase())}</strong></div>
         </div>
+        ${pageLabel}
       </div>
     </div>`;
 }
@@ -144,7 +146,7 @@ function productsTableHtml(model) {
     </table>`;
 }
 
-function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficiarySignatureUrl, driverSignatureUrl }) {
+function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficiarySignatureUrl, driverSignatureUrl, pageIndex, pageTotal }) {
   const processTypeUpper = (model.processType || '').trim().toUpperCase();
   const needsAviz = ['AMPLASARE', 'RIDICARE', 'VANZARE'].includes(processTypeUpper);
   const dt = docDateTime(model.createdAt);
@@ -236,11 +238,11 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
       <tr><td><strong>${esc(COMPANY_INFO.name)}</strong></td><td class="right"><strong>${esc((model.clientName || 'DENUMIRE BENEFICIAR').toUpperCase())}</strong></td></tr>
     </table>
 
-    ${runningFooter(model, depotEmail, depotPhone)}
+    ${runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal)}
   </section>`;
 }
 
-function pageTwoAviz({ model, depotEmail, depotPhone, driverSignatureUrl, stampAvailable }) {
+function pageTwoAviz({ model, depotEmail, depotPhone, driverSignatureUrl, stampAvailable, pageIndex, pageTotal }) {
   const processTypeUpper = (model.processType || '').trim().toUpperCase();
   const avizNumber = displayAvizNumber(model.avizNumber);
   const clientName = (model.clientName || '').trim().toUpperCase() || 'BENEFICIAR';
@@ -345,11 +347,11 @@ function pageTwoAviz({ model, depotEmail, depotPhone, driverSignatureUrl, stampA
       </tbody>
     </table>
 
-    ${runningFooter(model, depotEmail, depotPhone)}
+    ${runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal)}
   </section>`;
 }
 
-function photoPage({ model, index, photoUrl }) {
+function photoPage({ model, index, photoUrl, depotEmail, depotPhone, pageIndex, pageTotal }) {
   return `
   <section class="doc-page">
     <div class="doc-header">
@@ -364,6 +366,7 @@ function photoPage({ model, index, photoUrl }) {
           : `<div class="doc-annex-placeholder"><div class="doc-bold doc-value-missing">ZONA SECURIZATA | FOTO INTERZIS</div><div>Conform observatiilor soferului, captura foto nu a putut fi realizata.</div></div>`
       }
     </div>
+    ${runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal)}
   </section>`;
 }
 
@@ -385,15 +388,23 @@ export function buildDocumentHtml(params) {
   const depotEmail = (model.depotRepresentativeEmail || '').trim() || `${withoutDiacritics(model.depotName || '').toLowerCase().replace(/[^a-z0-9]+/g, '')}@eurowc.ro`;
   const depotPhone = (model.depotRepresentativePhone || '').trim() || '0735 214 762';
 
-  let html = '';
-  html += pageOnePv({ ...params, depotEmail, depotPhone, isPreview });
-  if (needsAviz) html += pageTwoAviz({ ...params, depotEmail, depotPhone });
-
   const soferObservations = (model.observatii || '').trim();
   const showSecurePlaceholder = photoUrls.length === 0 && processTypeUpper !== 'LIPSA ACCES' && soferObservations.length > 0;
   const annexUrls = photoUrls.length ? photoUrls : showSecurePlaceholder ? [null] : [];
+  const pageTotal = 1 + (needsAviz ? 1 : 0) + annexUrls.length;
+  let pageIndex = 0;
+
+  let html = '';
+  pageIndex += 1;
+  html += pageOnePv({ ...params, depotEmail, depotPhone, isPreview, pageIndex, pageTotal });
+  if (needsAviz) {
+    pageIndex += 1;
+    html += pageTwoAviz({ ...params, depotEmail, depotPhone, pageIndex, pageTotal });
+  }
+
   annexUrls.forEach((url, i) => {
-    html += photoPage({ model, index: i + 1, photoUrl: url });
+    pageIndex += 1;
+    html += photoPage({ model, index: i + 1, photoUrl: url, depotEmail, depotPhone, pageIndex, pageTotal });
   });
 
   return html;

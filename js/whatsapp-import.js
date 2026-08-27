@@ -6,11 +6,25 @@
 import { el } from './utils.js';
 import { openModal, textAreaField } from './components.js';
 
+// WhatsApp foloseste *bold*, _italic_ si ~tăiat~ ca marcaje simple in jurul
+// cuvintelor/frazelor — cand soferul copiaza un mesaj formatat (fie doar
+// valoarea, fie linia intreaga, eticheta inclusiv: "*NUME CL*: *valoare*"),
+// aceste caractere ajung altfel in campurile formularului (si pe documentul
+// final). Datele procesate aici (nume, adrese, telefoane) nu contin
+// niciodata legitim aceste caractere, asa ca le eliminam peste tot in linie,
+// nu doar la capete — altfel o eticheta ingrosata integral tot ramane
+// nerecunoscuta de regex-ul de etichete.
+function stripWaFormatting(value) {
+  return String(value || '')
+    .replace(/[*_~]+/g, '')
+    .trim();
+}
+
 function matchLabel(lines, labelPattern) {
   const re = new RegExp(`^\\s*(?:${labelPattern})\\s*\\.?\\s*:?\\s*[:\\-]?\\s*(.+)$`, 'i');
   for (const line of lines) {
     const m = re.exec(line);
-    if (m && m[1] && m[1].trim()) return m[1].trim();
+    if (m && m[1] && m[1].trim()) return stripWaFormatting(m[1]);
   }
   return '';
 }
@@ -21,7 +35,7 @@ function matchLabel(lines, labelPattern) {
 export function parseWhatsAppOrderText(rawText) {
   const lines = String(rawText || '')
     .split(/\r?\n/)
-    .map((l) => l.trim())
+    .map((l) => stripWaFormatting(l))
     .filter(Boolean);
 
   const clientName = matchLabel(lines, 'NUME\\s*CL(?:IENT)?');
@@ -40,7 +54,7 @@ export function parseWhatsAppOrderText(rawText) {
     const m = /^(\d{1,3})\s+([A-Za-zĂÂÎȘȚăâîșțŞŢ][A-Za-zĂÂÎȘȚăâîșțŞŢ0-9 \-]{2,60})$/.exec(line);
     if (m) {
       productQty = parseInt(m[1], 10);
-      productText = m[2].trim();
+      productText = stripWaFormatting(m[2]);
       break;
     }
   }

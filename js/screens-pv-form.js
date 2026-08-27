@@ -40,7 +40,7 @@ function loadLogoImage() {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
-    img.src = 'assets/logo/euro_ecologic_logo.png';
+    img.src = 'assets/logo/euro_ecologic_mark.png';
   });
   return logoImageCache;
 }

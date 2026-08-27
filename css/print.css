@@ -149,6 +149,7 @@
 .doc-footer-logo { width: 20mm; height: 9mm; object-fit: contain; }
 .doc-footer-sep { width: 0.5pt; height: 9mm; background: #99a3b3; }
 .doc-footer-text { font-family: Arial, sans-serif; font-size: 6.4pt; color: #33415c; line-height: 1.35; flex: 1; }
+.doc-footer-page { font-family: Arial, sans-serif; font-size: 7.2pt; color: var(--doc-muted); white-space: nowrap; align-self: flex-end; }
 
 /* ---- Aviz ---- */
 .doc-aviz-parties { align-items: stretch; }
@@ -230,7 +231,15 @@
   #screen-stack, #toast-host { display: none !important; }
   #print-root { display: block !important; }
   .doc-page {
+    /* O inaltime FIXA (nu doar min-height) e necesara aici: unele motoare
+       de tiparire (Chrome desktop / Skia) nu calculeaza corect "flex: 1"
+       (folosit de .doc-annex-photo-frame) fata de un min-height in
+       contextul de paginare, ceea ce taia poza de confirmare si lasa
+       pagini goale dupa ea. Cu o inaltime ferma, calculul e determinist
+       pe orice motor de tiparire. */
+    height: 297mm;
     page-break-after: always;
+    page-break-inside: avoid;
     box-shadow: none !important;
     transform: none !important;
     margin: 0 !important;
