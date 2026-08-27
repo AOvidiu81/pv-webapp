@@ -95,13 +95,15 @@ export async function signOut() {
 }
 
 async function fetchOwnProfile(supabase, userId) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, username, full_name, role, active, car_number, signature_url, signature_set')
-    .eq('id', userId)
-    .single();
-  if (error) return null;
-  return data;
+  // RPC (POST), nu .from().select() (GET): raspunsurile GET pot fi cachuite
+  // undeva intre client si Supabase dupa URL, indiferent de contul folosit —
+  // asta ar putea insemna ca un sofer dezactivat de admin tot trece de poarta
+  // de login pentru ca primeste un raspuns vechi, cu "active: true", din
+  // cache. POST-ul unei functii RPC nu e cachuit, deci verificarea e mereu
+  // pe date proaspete.
+  const { data, error } = await supabase.rpc('get_own_profile');
+  if (error || !data || !data.length) return null;
+  return data[0];
 }
 
 /** Profilul soferului logat momentan, sau null daca nu exista sesiune
@@ -173,11 +175,8 @@ export async function syncMasterData(profile) {
   }
 
   try {
-    const { data: vehicles, error } = await supabase
-      .from('vehicles')
-      .select('id, brand, plate_number')
-      .eq('active', true)
-      .order('brand');
+    // RPC (POST), nu GET — vezi comentariul din fetchOwnProfile().
+    const { data: vehicles, error } = await supabase.rpc('list_active_vehicles');
     if (!error && vehicles) {
       const existing = await CarRepo.getAll();
       const syncedIds = new Set(vehicles.map((v) => 'synced-' + v.id));
@@ -198,11 +197,8 @@ export async function syncMasterData(profile) {
   }
 
   try {
-    const { data: products, error } = await supabase
-      .from('products')
-      .select('model, type')
-      .eq('active', true)
-      .order('model');
+    // RPC (POST), nu GET — vezi comentariul din fetchOwnProfile().
+    const { data: products, error } = await supabase.rpc('list_active_products');
     if (!error && products && products.length) {
       const byModel = new Map();
       for (const p of products) {

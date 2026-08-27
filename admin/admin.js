@@ -179,11 +179,11 @@ function esc(v) {
 async function loadDrivers() {
   const tbody = document.getElementById('drivers-tbody');
   tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Se incarca...</td></tr>`;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, username, full_name, car_number, active, signature_set')
-    .eq('role', 'driver')
-    .order('full_name');
+  // RPC (POST) in loc de .from().select() (GET): unele CDN-uri cachuiesc
+  // raspunsurile GET dupa URL, ignorand contul autentificat — un sofer nou
+  // adaugat sau o dezactivare puteau ramane invizibile in tabel mult timp.
+  // POST-ul unei functii RPC nu e cachuit, deci datele sunt mereu proaspete.
+  const { data, error } = await supabase.rpc('list_drivers');
   if (error) {
     tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
     return;
@@ -388,7 +388,8 @@ async function deleteDriver(row) {
 async function loadVehicles() {
   const tbody = document.getElementById('vehicles-tbody');
   tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Se incarca...</td></tr>`;
-  const { data, error } = await supabase.from('vehicles').select('*').order('brand');
+  // RPC (POST), nu GET — vezi comentariul din loadDrivers().
+  const { data, error } = await supabase.rpc('list_vehicles');
   if (error) {
     tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
     return;
@@ -480,7 +481,8 @@ document.getElementById('add-vehicle-btn').addEventListener('click', async () =>
 async function loadProducts() {
   const tbody = document.getElementById('products-tbody');
   tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Se incarca...</td></tr>`;
-  const { data, error } = await supabase.from('products').select('*').order('model').order('type');
+  // RPC (POST), nu GET — vezi comentariul din loadDrivers().
+  const { data, error } = await supabase.rpc('list_products');
   if (error) {
     tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
     return;
