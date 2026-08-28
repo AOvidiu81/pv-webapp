@@ -311,7 +311,6 @@ async function editDriver(row) {
     bodyHtml: `
       <div class="field"><label>Nume utilizator (login)</label><input id="m-username" value="${esc(row.username)}" /></div>
       <div class="field"><label>Nume complet</label><input id="m-fullname" value="${esc(row.full_name)}" /></div>
-      <div class="field"><label>Numar masina</label><input id="m-car" value="${esc(row.car_number || '')}" /></div>
       <div class="field"><label>CI — serie</label><input id="m-ci-serie" value="${esc(row.ci_serie || '')}" placeholder="ex: HR" /></div>
       <div class="field"><label>CI — numar</label><input id="m-ci-numar" value="${esc(row.ci_numar || '')}" placeholder="ex: 123456" /></div>
       <div class="field"><label>Numar contract</label><input id="m-contract" value="${esc(row.nr_contract || '')}" /></div>
@@ -327,7 +326,6 @@ async function editDriver(row) {
         onClick: async (backdrop) => {
           const username = backdrop.querySelector('#m-username').value.trim();
           const full_name = backdrop.querySelector('#m-fullname').value.trim();
-          const car_number = backdrop.querySelector('#m-car').value.trim();
           const ci_serie = backdrop.querySelector('#m-ci-serie').value.trim();
           const ci_numar = backdrop.querySelector('#m-ci-numar').value.trim();
           const nr_contract = backdrop.querySelector('#m-contract').value.trim();
@@ -342,7 +340,7 @@ async function editDriver(row) {
               user_id: row.id,
               username: username !== row.username ? username : undefined,
               full_name,
-              car_number,
+              car_number: row.car_number || '',
               ci_serie,
               ci_numar,
               nr_contract,
