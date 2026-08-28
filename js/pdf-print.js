@@ -21,7 +21,7 @@ import { displayPvNumber, displayAvizNumber } from './pv-numbering.js';
 import { pushScreen } from './router.js';
 import { el } from './utils.js';
 import { showToast } from './components.js';
-import { generateDocumentPdfBlob, shareOrDownloadPdf } from './pdf-generate.js';
+import { generateDocumentPdfBlob } from './pdf-generate.js';
 
 const NA = 'N/A';
 
@@ -482,7 +482,7 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     const shareBtn = el(
       'button',
       { class: 'btn btn-block btn-outline' },
-      ['📤  Trimite (WhatsApp / alta aplicatie)']
+      ['📄  Deschide PDF']
     );
     let shareBusy = false;
     shareBtn.addEventListener('click', async () => {
@@ -491,14 +491,32 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
       const originalLabel = shareBtn.textContent;
       shareBtn.textContent = 'Se pregateste PDF-ul...';
       shareBtn.disabled = true;
+      // Deschidem fereastra IMEDIAT, in acelasi gest de click (sincron), ca
+      // browserul sa nu o blocheze ca popup — o umplem cu PDF-ul de indata
+      // ce e gata. Asa se deschide direct pagina PDF-ului generat, cu
+      // vizualizatorul nativ al telefonului (Chrome), care are propriile
+      // butoane de trimitere/partajare — nu mai trecem noi prin meniul de
+      // distribuire al sistemului (unde putea aparea Samsung Notes etc.).
+      const win = window.open('', '_blank');
       try {
         const blob = await generateDocumentPdfBlob(html);
-        const result = await shareOrDownloadPdf(blob, fileNameBase, { title: fileNameBase });
-        if (result === 'downloaded') {
-          showToast('PDF descarcat — il poti trimite din notificarea de descarcare sau din Fisiere.');
+        const safeName = /\.pdf$/i.test(fileNameBase) ? fileNameBase : `${fileNameBase}.pdf`;
+        const url = URL.createObjectURL(blob);
+        if (win && !win.closed) {
+          win.location.href = url;
+        } else {
+          // popup blocat -> descarcam direct fisierul ca rezerva
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = safeName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          showToast('PDF descarcat — il poti trimite din Fisiere.');
         }
       } catch (e) {
         console.error(e);
+        if (win && !win.closed) win.close();
         showToast('Nu am putut genera PDF-ul: ' + e.message, { danger: true });
       } finally {
         shareBusy = false;
