@@ -274,6 +274,11 @@ function captureSignatureScreen(title) {
     let drawing = false;
     let hasStrokes = false;
     let last = null;
+    // Bounding box (in pixeli CSS, adica acelasi sistem de coordonate ca
+    // pointFromEvent) al cernelii desenate efectiv — folosit la export ca
+    // semnatura sa fie decupata stans pe conturul ei, nu pe tot canvas-ul
+    // (mult mai lat, gol in cea mai mare parte, dupa blocarea landscape).
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
     function resize() {
       const rect = canvasWrap.getBoundingClientRect();
@@ -291,18 +296,29 @@ function captureSignatureScreen(title) {
     requestAnimationFrame(resize);
     // rotatia in landscape (lockLandscape) se poate finaliza asincron, dupa
     // ce ecranul e deja montat — mai facem un resize putin mai tarziu, ca
-    // suprafata de desenat sa preia dimensiunile corecte, late.
-    setTimeout(resize, 350);
+    // suprafata de desenat sa preia dimensiunile corecte. Facem asta DOAR
+    // daca soferul nu a inceput deja sa semneze intre timp — altfel am
+    // reseta canvas-ul (si sterge semnatura) chiar in timp ce se deseneaza.
+    setTimeout(() => {
+      if (!hasStrokes) resize();
+    }, 350);
 
     function pointFromEvent(e) {
       const rect = canvas.getBoundingClientRect();
       const point = e.touches ? e.touches[0] : e;
       return { x: point.clientX - rect.left, y: point.clientY - rect.top };
     }
+    function extendBounds(p) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
     function start(e) {
       e.preventDefault();
       drawing = true;
       last = pointFromEvent(e);
+      extendBounds(last);
     }
     function move(e) {
       if (!drawing) return;
@@ -314,6 +330,7 @@ function captureSignatureScreen(title) {
       ctx.stroke();
       last = p;
       hasStrokes = true;
+      extendBounds(p);
     }
     function end(e) {
       drawing = false;
@@ -326,6 +343,10 @@ function captureSignatureScreen(title) {
       const rect = canvasWrap.getBoundingClientRect();
       ctx.clearRect(0, 0, rect.width, rect.height);
       hasStrokes = false;
+      minX = Infinity;
+      minY = Infinity;
+      maxX = -Infinity;
+      maxY = -Infinity;
     }
 
     function save() {
@@ -333,7 +354,36 @@ function captureSignatureScreen(title) {
         showToast('Semneaza in chenar inainte de validare.');
         return;
       }
-      canvas.toBlob((blob) => pop(blob), 'image/png');
+      // Decupam semnatura la conturul cernelii desenate (+ un mic padding),
+      // in loc sa exportam tot canvas-ul lat/gol — ca imaginea rezultata sa
+      // aiba proportia semnaturii reale si sa umple bine chenarul alocat in
+      // documentul PV (care are o forma/dimensiune similara, de tip landscape).
+      const ratio = window.devicePixelRatio || 1;
+      const PAD = 14; // padding, in pixeli CSS
+      const cssW = canvas.width / ratio;
+      const cssH = canvas.height / ratio;
+      const cropX = Math.max(0, minX - PAD);
+      const cropY = Math.max(0, minY - PAD);
+      const cropW = Math.min(cssW, maxX + PAD) - cropX;
+      const cropH = Math.min(cssH, maxY + PAD) - cropY;
+
+      if (!(cropW > 0) || !(cropH > 0)) {
+        canvas.toBlob((blob) => pop(blob), 'image/png');
+        return;
+      }
+
+      const out = document.createElement('canvas');
+      out.width = Math.round(cropW * ratio);
+      out.height = Math.round(cropH * ratio);
+      const outCtx = out.getContext('2d');
+      outCtx.drawImage(
+        canvas,
+        Math.round(cropX * ratio), Math.round(cropY * ratio),
+        Math.round(cropW * ratio), Math.round(cropH * ratio),
+        0, 0,
+        out.width, out.height
+      );
+      out.toBlob((blob) => pop(blob), 'image/png');
     }
 
     return screen;
