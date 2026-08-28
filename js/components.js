@@ -205,9 +205,53 @@ export function outlineButton(label, onClick, { icon, disabled = false, error = 
 }
 
 // ------------------------------------------------------------------
+// Blocare orientare landscape — ca in aplicatia veche (APK): la semnat
+// (indiferent daca e semnatura proprie a soferului sau a beneficiarului),
+// telefonul trece fortat pe orizontala, ca zona de semnat sa fie cat mai
+// lata. Screen Orientation API cere de obicei ca pagina sa fie in
+// fullscreen inainte sa permita lock() — incercam intai direct (functioneaza
+// uneori si fara, mai ales cand aplicatia ruleaza instalata ca PWA), apoi cu
+// fullscreen ca rezerva. Daca niciuna nu e suportata (ex: iOS Safari, care nu
+// implementeaza deloc lock()), esuam silentios — soferul poate roti manual.
+async function lockLandscape() {
+  try {
+    await screen.orientation.lock('landscape');
+    return;
+  } catch (e) {
+    // continuam cu incercarea prin fullscreen mai jos
+  }
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen();
+    }
+    await screen.orientation.lock('landscape');
+  } catch (e) {
+    // orientarea nu poate fi fortata pe acest dispozitiv/browser — ok, nu blocam semnarea
+  }
+}
+
+function unlockOrientation() {
+  try {
+    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+  } catch (e) {}
+  try {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } catch (e) {}
+}
+
+// ------------------------------------------------------------------
 // Signature pad (canvas) — ecran complet, folosit prin pushScreen()
 // ------------------------------------------------------------------
 export async function captureSignature({ title = 'Semnatura' } = {}) {
+  await lockLandscape();
+  try {
+    return await captureSignatureScreen(title);
+  } finally {
+    unlockOrientation();
+  }
+}
+
+function captureSignatureScreen(title) {
   return pushScreen(({ pop }) => {
     const canvasWrap = el('div', { class: 'signature-canvas-wrap' });
     const canvas = el('canvas', { class: 'signature-canvas' });
@@ -245,6 +289,10 @@ export async function captureSignature({ title = 'Semnatura' } = {}) {
       ctx.strokeStyle = '#1B2F6B';
     }
     requestAnimationFrame(resize);
+    // rotatia in landscape (lockLandscape) se poate finaliza asincron, dupa
+    // ce ecranul e deja montat — mai facem un resize putin mai tarziu, ca
+    // suprafata de desenat sa preia dimensiunile corecte, late.
+    setTimeout(resize, 350);
 
     function pointFromEvent(e) {
       const rect = canvas.getBoundingClientRect();
