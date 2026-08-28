@@ -230,6 +230,15 @@ async function lockLandscape() {
   }
 }
 
+// Vibratie scurta la apasarea butoanelor de confirmare/stergere semnatura —
+// acelasi feedback tactil ca in aplicatia veche (APK). Vibration API nu e
+// suportata pe iOS Safari, deci esuam silentios acolo.
+function hapticTap() {
+  try {
+    if (navigator.vibrate) navigator.vibrate(20);
+  } catch (e) {}
+}
+
 function unlockOrientation() {
   try {
     if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
@@ -263,8 +272,8 @@ function captureSignatureScreen(title) {
       el('div', { class: 'topbar-title' }, [title]),
       el('div', { class: 'topbar-spacer' }),
     ]);
-    const clearBtn = el('button', { class: 'sig-side-btn sig-clear', onclick: () => clear() }, ['⟲']);
-    const okBtn = el('button', { class: 'sig-side-btn sig-ok', onclick: () => save() }, ['✓']);
+    const clearBtn = el('button', { class: 'sig-side-btn sig-clear', onclick: () => { hapticTap(); clear(); } }, ['⟲']);
+    const okBtn = el('button', { class: 'sig-side-btn sig-ok', onclick: () => { hapticTap(); save(); } }, ['✓']);
     const row = el('div', { class: 'signature-row' }, [clearBtn, canvasWrap, okBtn]);
     screen.appendChild(topBar);
     screen.appendChild(row);
