@@ -24,7 +24,7 @@ import {
   gpsAccuracyGate,
   captureCameraPhoto,
 } from './components.js';
-import { DEFAULT_PRODUCT_CATALOG, DEFAULT_AUXILIARY_BY_CATEGORY } from './catalog-defaults.js';
+import { DEFAULT_PRODUCT_CATALOG, DEFAULT_AUXILIARY_BY_CATEGORY, COMPANY_INFO } from './catalog-defaults.js';
 import { annotatePhotoWithMetadata } from './photo-annotate.js';
 import { nextPvNumber, nextAvizNumber, prefixForType, displayPvNumber, displayAvizNumber } from './pv-numbering.js';
 import { buildDocumentHtml, openPrintPreview } from './pdf-print.js';
@@ -108,9 +108,15 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
   // trebuie retrimis P.V.-ul semnat.
   const allDepots = await DepotRepo.getAll().catch(() => []);
 
+  // Exceptie: HARGHITA [HR] nu e un depozit de teren, ci sediul central al
+  // firmei (Vlahita, jud. Harghita — vezi COMPANY_INFO), asa ca P.V.-urile
+  // de acolo se retrimit la adresa oficiala a firmei, nu la un "depozit".
+  const SPECIAL_COUNTY_EMAILS = { HR: COMPANY_INFO.email };
+
   function resolveAvizReturnEmail(contractReferenceRaw) {
     const code = matchCountyCodeInText(contractReferenceRaw);
     if (code) {
+      if (SPECIAL_COUNTY_EMAILS[code]) return SPECIAL_COUNTY_EMAILS[code];
       const match = allDepots.find(
         (d) => countyAbbreviation(d.name) === code && (d.representativeEmail || '').trim()
       );
