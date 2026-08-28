@@ -2,7 +2,7 @@
 // selectia tipului de proces verbal. Port simplificat din
 // main_selector_screen.dart / home_selection_screen.dart / process_screen.dart.
 
-import { el, formatDateRo, weekdayLabelRo } from './utils.js';
+import { el, formatDateRo, weekdayLabelRo, vechimeLabel } from './utils.js';
 import { pushScreen } from './router.js';
 import { DriverRepo, CarRepo, DepotRepo } from './db.js';
 import { selectField, sectionCard, primaryButton, showToast } from './components.js';
@@ -36,6 +36,17 @@ export async function openMainSelector() {
       const today = new Date();
       infoCard.innerHTML = '';
       infoCard.appendChild(el('div', { style: 'margin-bottom:4px' }, [`CI: ${selectedDriver?.ci || '-'}`]));
+      if (selectedDriver?.nrContract) {
+        infoCard.appendChild(el('div', { style: 'margin-bottom:4px' }, [`Nr. contract: ${selectedDriver.nrContract}`]));
+      }
+      if (selectedDriver?.dataAngajare) {
+        const [y, m, d] = selectedDriver.dataAngajare.split('-');
+        const angajareLabel = d && m && y ? `${d}.${m}.${y}` : selectedDriver.dataAngajare;
+        const vechime = vechimeLabel(selectedDriver.dataAngajare);
+        infoCard.appendChild(
+          el('div', { style: 'margin-bottom:4px' }, [`Data angajarii: ${angajareLabel}${vechime ? ` (vechime: ${vechime})` : ''}`])
+        );
+      }
       infoCard.appendChild(el('div', { style: 'margin-bottom:4px' }, [`Data: ${weekdayLabelRo(today)} ${formatDateRo(today)}`]));
       infoCard.appendChild(el('div', {}, [`Adresa: ${selectedDepot?.address || '-'}`]));
       if (selectedDriver?.signatureDataUrl) {

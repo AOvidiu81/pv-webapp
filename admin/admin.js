@@ -309,8 +309,14 @@ async function editDriver(row) {
   await openModal({
     title: 'Editeaza sofer',
     bodyHtml: `
+      <div class="field"><label>Nume utilizator (login)</label><input id="m-username" value="${esc(row.username)}" /></div>
       <div class="field"><label>Nume complet</label><input id="m-fullname" value="${esc(row.full_name)}" /></div>
       <div class="field"><label>Numar masina</label><input id="m-car" value="${esc(row.car_number || '')}" /></div>
+      <div class="field"><label>CI — serie</label><input id="m-ci-serie" value="${esc(row.ci_serie || '')}" placeholder="ex: HR" /></div>
+      <div class="field"><label>CI — numar</label><input id="m-ci-numar" value="${esc(row.ci_numar || '')}" placeholder="ex: 123456" /></div>
+      <div class="field"><label>Numar contract</label><input id="m-contract" value="${esc(row.nr_contract || '')}" /></div>
+      <div class="field"><label>Data angajarii</label><input id="m-angajare" type="date" value="${esc(row.data_angajare || '')}" /></div>
+      <div class="hint-text">Schimbarea numelui de utilizator schimba si datele de login ale soferului — anunta-l inainte.</div>
       <div class="error-text" id="m-error"></div>
     `,
     actions: [
@@ -319,20 +325,35 @@ async function editDriver(row) {
         label: 'Salveaza',
         className: 'btn-primary',
         onClick: async (backdrop) => {
+          const username = backdrop.querySelector('#m-username').value.trim();
           const full_name = backdrop.querySelector('#m-fullname').value.trim();
           const car_number = backdrop.querySelector('#m-car').value.trim();
+          const ci_serie = backdrop.querySelector('#m-ci-serie').value.trim();
+          const ci_numar = backdrop.querySelector('#m-ci-numar').value.trim();
+          const nr_contract = backdrop.querySelector('#m-contract').value.trim();
+          const data_angajare = backdrop.querySelector('#m-angajare').value;
           const errEl = backdrop.querySelector('#m-error');
-          if (!full_name) {
-            errEl.textContent = 'Numele nu poate fi gol.';
+          if (!username || !full_name) {
+            errEl.textContent = 'Utilizatorul si numele nu pot fi goale.';
             return false;
           }
-          const { error } = await supabase.from('profiles').update({ full_name, car_number: car_number || null }).eq('id', row.id);
-          if (error) {
-            errEl.textContent = error.message;
+          try {
+            await callAdminFn('update_driver', {
+              user_id: row.id,
+              username: username !== row.username ? username : undefined,
+              full_name,
+              car_number,
+              ci_serie,
+              ci_numar,
+              nr_contract,
+              data_angajare,
+            });
+            showToast('Sofer actualizat.');
+            loadDrivers();
+          } catch (e) {
+            errEl.textContent = e.message;
             return false;
           }
-          showToast('Sofer actualizat.');
-          loadDrivers();
         },
       },
     ],

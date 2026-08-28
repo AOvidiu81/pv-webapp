@@ -217,12 +217,15 @@ export async function saveOwnSignature(dataUrl) {
 export async function syncMasterData(profile) {
   if (!profile) return;
   try {
+    const ci = [profile.ci_serie, profile.ci_numar].filter(Boolean).join(' ');
     await DriverRepo.save({
       id: LOCAL_DRIVER_KEY,
       name: profile.full_name,
-      ci: '',
+      ci,
       functia: '',
       signatureDataUrl: profile.signature_url || '',
+      nrContract: profile.nr_contract || '',
+      dataAngajare: profile.data_angajare || '',
       sortOrder: 0,
     });
   } catch (e) {

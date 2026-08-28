@@ -44,6 +44,28 @@ export function formatUserName(name) {
   return (name || '').trim();
 }
 
+/** Calculeaza vechimea (in ani si luni) de la o data de angajare
+ * ("YYYY-MM-DD", cum vine din baza de date) pana azi. Intoarce null daca
+ * data lipseste sau e invalida. */
+export function vechimeLabel(dataAngajareStr) {
+  if (!dataAngajareStr) return null;
+  const start = new Date(dataAngajareStr);
+  if (isNaN(start.getTime())) return null;
+  const now = new Date();
+  let years = now.getFullYear() - start.getFullYear();
+  let months = now.getMonth() - start.getMonth();
+  if (now.getDate() < start.getDate()) months--;
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  if (years <= 0 && months <= 0) return 'sub 1 luna';
+  const parts = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? 'an' : 'ani'}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? 'luna' : 'luni'}`);
+  return parts.join(' si ');
+}
+
 /** "Ovidiu Anitoiu" -> "O. ANITOIU" (port din _shortDriverName). */
 export function shortDriverName(value) {
   const parts = (value || '').trim().split(/\s+/).filter(Boolean);
