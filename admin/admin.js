@@ -21,6 +21,46 @@ function usernameToEmail(username) {
   return `pv-sofer-${clean}@eurowc.ro`;
 }
 
+// ---------- format data: DD-MM-YYYY in interfata, YYYY-MM-DD (ISO) in baza
+// de date. Input-ul nativ <input type="date"> afiseaza formatul impus de
+// browser/regiune (mm/dd/yyyy pe multe telefoane si pe Chrome din Windows),
+// nu il putem forta din HTML — de-aia folosim un camp text cu formatare
+// automata si validare proprie.
+function isoToDmy(iso) {
+  if (!iso) return '';
+  const [y, m, d] = String(iso).split('-');
+  if (!y || !m || !d) return '';
+  return `${d}-${m}-${y}`;
+}
+
+function dmyToIso(dmy) {
+  const clean = String(dmy || '').trim();
+  if (!clean) return { value: '' };
+  const match = clean.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (!match) return { error: 'Data trebuie scrisa in formatul ZZ-LL-AAAA (ex: 04-02-2025).' };
+  const [, dStr, mStr, yStr] = match;
+  const d = Number(dStr);
+  const m = Number(mStr);
+  const y = Number(yStr);
+  const check = new Date(y, m - 1, d);
+  if (check.getFullYear() !== y || check.getMonth() !== m - 1 || check.getDate() !== d) {
+    return { error: 'Data nu este valida.' };
+  }
+  return { value: `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` };
+}
+
+/** Ataseaza pe un input text formatarea automata cu cratime pe masura ce
+ * se tasteaza cifre: "04022025" -> "04-02-2025". */
+function attachDmyAutoformat(input) {
+  input.addEventListener('input', () => {
+    const digits = input.value.replace(/\D/g, '').slice(0, 8);
+    let out = digits;
+    if (digits.length > 4) out = `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+    else if (digits.length > 2) out = `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    input.value = out;
+  });
+}
+
 async function callAdminFn(action, extra) {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData?.session?.access_token;
@@ -314,10 +354,11 @@ async function editDriver(row) {
       <div class="field"><label>CI — serie</label><input id="m-ci-serie" value="${esc(row.ci_serie || '')}" placeholder="ex: HR" /></div>
       <div class="field"><label>CI — numar</label><input id="m-ci-numar" value="${esc(row.ci_numar || '')}" placeholder="ex: 123456" /></div>
       <div class="field"><label>Numar contract</label><input id="m-contract" value="${esc(row.nr_contract || '')}" /></div>
-      <div class="field"><label>Data angajarii</label><input id="m-angajare" type="date" value="${esc(row.data_angajare || '')}" /></div>
+      <div class="field"><label>Data angajarii</label><input id="m-angajare" type="text" inputmode="numeric" maxlength="10" placeholder="ZZ-LL-AAAA" value="${esc(isoToDmy(row.data_angajare))}" /></div>
       <div class="hint-text">Schimbarea numelui de utilizator schimba si datele de login ale soferului — anunta-l inainte.</div>
       <div class="error-text" id="m-error"></div>
     `,
+    onMount: (backdrop) => attachDmyAutoformat(backdrop.querySelector('#m-angajare')),
     actions: [
       { label: 'Anuleaza', className: 'btn-outline' },
       {
@@ -329,10 +370,14 @@ async function editDriver(row) {
           const ci_serie = backdrop.querySelector('#m-ci-serie').value.trim();
           const ci_numar = backdrop.querySelector('#m-ci-numar').value.trim();
           const nr_contract = backdrop.querySelector('#m-contract').value.trim();
-          const data_angajare = backdrop.querySelector('#m-angajare').value;
           const errEl = backdrop.querySelector('#m-error');
           if (!username || !full_name) {
             errEl.textContent = 'Utilizatorul si numele nu pot fi goale.';
+            return false;
+          }
+          const angajareResult = dmyToIso(backdrop.querySelector('#m-angajare').value);
+          if (angajareResult.error) {
+            errEl.textContent = angajareResult.error;
             return false;
           }
           try {
@@ -344,7 +389,7 @@ async function editDriver(row) {
               ci_serie,
               ci_numar,
               nr_contract,
-              data_angajare,
+              data_angajare: angajareResult.value,
             });
             showToast('Sofer actualizat.');
             loadDrivers();

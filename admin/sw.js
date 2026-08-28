@@ -5,7 +5,7 @@
 // (HTML/CSS/JS/imagini) pentru o incarcare rapida — NU ofera functionare
 // offline pentru datele de administrare.
 
-const CACHE_VERSION = 'pv-euro-ecologic-admin-v6';
+const CACHE_VERSION = 'pv-euro-ecologic-admin-v7';
 const APP_SHELL = [
   './',
   'index.html',
