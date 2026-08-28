@@ -255,6 +255,11 @@ select.field-input { appearance: none; background-image: linear-gradient(45deg, 
 .series-row { display: flex; gap: 8px; margin-bottom: 6px; align-items: center; }
 .series-row .field { flex: 1; margin-bottom: 0; }
 .series-remove { flex-shrink: 0; width: 34px; height: 34px; border: none; background: none; color: var(--danger); font-size: 18px; }
+.series-input-wrap { display: flex; align-items: stretch; border-radius: var(--radius-sm); border: 1.4px solid #d8dfea; background: #fff; overflow: hidden; }
+.series-input-wrap:focus-within { border-color: var(--brand-primary); }
+.series-prefix { display: flex; align-items: center; padding: 0 6px 0 14px; font-size: 15px; font-weight: 700; color: var(--ink-soft); background: #f4f6fa; border-right: 1.4px solid #d8dfea; }
+.series-input-wrap .series-suffix-input { flex: 1; border: none; border-radius: 0; min-width: 0; }
+.series-input-wrap .series-suffix-input:focus { outline: none; }
 .checkbox-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 2px; }
 .checkbox-row input { width: 19px; height: 19px; margin-top: 1px; flex-shrink: 0; }
 .checkbox-row .checkbox-label { font-size: 14px; font-weight: 600; }

@@ -43,6 +43,28 @@ function splitModelType(combined) {
   return { model: modelName, type: typeWithExtras };
 }
 
+// Prefix fix pentru orice serie afisata in document — soferul tasteaza doar
+// partea variabila (vezi seriesField() din screens-pv-form.js), care poate
+// veni deja fara sau (din date vechi) cu "EE-" pus manual; nu il dublam.
+function withSeriesPrefix(raw) {
+  const clean = String(raw || '').trim();
+  if (!clean) return '';
+  return /^EE-/i.test(clean) ? clean : `EE-${clean}`;
+}
+
+/** Randeaza lista de serii ale unui produs ca text cu delimitator "; ",
+ * maxim 6 serii pe linie — grupele suplimentare de 6 trec pe randul urmator
+ * (in interiorul aceleiasi celule din tabel). */
+function formatSeriesCell(seriesList) {
+  if (!seriesList.length) return '-';
+  const withPrefix = seriesList.map(withSeriesPrefix);
+  const lines = [];
+  for (let i = 0; i < withPrefix.length; i += 6) {
+    lines.push(withPrefix.slice(i, i + 6).map(esc).join('; '));
+  }
+  return lines.join('<br>');
+}
+
 function productRows(model) {
   const modelEntries = (model.productModel || '').split(';').map((e) => e.trim()).filter(Boolean);
   const seriesGroups = (model.productSeries || '').split(';').map((e) => e.trim());
@@ -54,13 +76,13 @@ function productRows(model) {
     const combined = i < modelEntries.length ? modelEntries[i] : '';
     const split = splitModelType(combined);
     const seriesGroup = i < seriesGroups.length ? seriesGroups[i] : '';
-    const seriesFormatted = seriesGroup.split(',').map((s) => s.trim()).filter(Boolean).join(', ');
-    const bucCount = seriesGroup.trim()
-      ? seriesGroup.split(',').filter((s) => s.trim()).length
+    const seriesList = seriesGroup.split(',').map((s) => s.trim()).filter(Boolean);
+    const bucCount = seriesList.length
+      ? seriesList.length
       : hasNoSeriesData && i === 0 && !isNaN(qty) && qty !== 0
       ? Math.abs(qty)
       : 1;
-    rows.push({ buc: bucCount, model: split.model, type: split.type, series: seriesFormatted || '-' });
+    rows.push({ buc: bucCount, model: split.model, type: split.type, seriesList });
   }
   return rows;
 }
@@ -106,7 +128,7 @@ function docDateTime(iso) {
 }
 
 function runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal) {
-  const pageLabel = pageIndex && pageTotal ? `<div class="doc-footer-page">Pagina ${pageIndex} din ${pageTotal}</div>` : '';
+  const pageLabel = pageIndex && pageTotal ? `<div class="doc-footer-sep"></div><div class="doc-footer-page">Pagina ${pageIndex} din ${pageTotal}</div>` : '';
   return `
     <div class="doc-footer">
       <div class="doc-footer-rule"></div>
@@ -141,12 +163,12 @@ function productsTableHtml(model) {
     <table class="doc-table doc-products-table">
       <thead><tr><th class="col-buc">BUC.</th><th class="col-model">MODEL PRODUS</th><th class="col-tip">TIP PRODUS</th><th class="col-serii">SERII</th></tr></thead>
       <tbody>
-        ${rows.map((r) => `<tr><td class="col-buc center">${r.buc}</td><td class="col-model">${esc(r.model)}</td><td class="col-tip">${esc(r.type)}</td><td class="col-serii">${esc(r.series)}</td></tr>`).join('')}
+        ${rows.map((r) => `<tr><td class="col-buc center">${r.buc}</td><td class="col-model">${esc(r.model)}</td><td class="col-tip">${esc(r.type)}</td><td class="col-serii">${formatSeriesCell(r.seriesList)}</td></tr>`).join('')}
       </tbody>
     </table>`;
 }
 
-function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficiarySignatureUrl, driverSignatureUrl, pageIndex, pageTotal }) {
+function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficiarySignatureUrl, driverSignatureUrl, stampAvailable, pageIndex, pageTotal }) {
   const processTypeUpper = (model.processType || '').trim().toUpperCase();
   const needsAviz = ['AMPLASARE', 'RIDICARE', 'VANZARE'].includes(processTypeUpper);
   const dt = docDateTime(model.createdAt);
@@ -235,7 +257,18 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
 
     <table class="doc-table doc-parties-table">
       <tr><td>PRESTATOR</td><td class="right">BENEFICIAR</td></tr>
-      <tr><td><strong>${esc(COMPANY_INFO.name)}</strong></td><td class="right"><strong>${esc((model.clientName || 'DENUMIRE BENEFICIAR').toUpperCase())}</strong></td></tr>
+      <tr>
+        <td>
+          <div class="doc-parties-prestator">
+            <strong>${esc(COMPANY_INFO.name)}</strong>
+            <div class="doc-stamp-slot doc-stamp-slot-sm">
+              ${driverSignatureUrl ? `<img class="doc-stamp-signature" src="${driverSignatureUrl}" alt="" />` : ''}
+              ${stampAvailable ? `<img class="doc-stamp-img" src="assets/docs/stampila_euro_ecologic.png" alt="" />` : ''}
+            </div>
+          </div>
+        </td>
+        <td class="right"><strong>${esc((model.clientName || 'DENUMIRE BENEFICIAR').toUpperCase())}</strong></td>
+      </tr>
     </table>
 
     ${runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal)}

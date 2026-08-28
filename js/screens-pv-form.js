@@ -54,6 +54,16 @@ async function ensureCatalogSeeded() {
   }
 }
 
+/** Camp de serie cu prefixul fix "EE-" afisat lipit de input (nu face parte
+ * din valoarea salvata) — soferul tasteaza doar cifrele/literele de dupa
+ * prefix; prefixul e adaugat la afisarea in PDF (pdf-print.js). */
+function seriesField({ label, value, onInput }) {
+  const input = el('input', { class: 'field-input series-suffix-input', value: value || '' });
+  input.addEventListener('input', () => onInput(input.value));
+  const wrap = el('div', { class: 'series-input-wrap' }, [el('span', { class: 'series-prefix' }, ['EE-']), input]);
+  return el('div', { class: 'field' }, [el('label', { class: 'field-label' }, [label]), wrap]);
+}
+
 function newProductEntry() {
   return { id: uuid(), model: '', type: '', series: [''], aux: [], condition: 'Produs Nou' };
 }
@@ -331,7 +341,7 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
 
       if (!state.noSeriesMode) {
         entry.series.forEach((series, si) => {
-          const sField = textField({ label: `Serie ${si + 1}`, value: series, onInput: (v) => { entry.series[si] = v; missing.delete('productDetails'); } });
+          const sField = seriesField({ label: `Serie ${si + 1}`, value: series, onInput: (v) => { entry.series[si] = v; missing.delete('productDetails'); } });
           const row = el('div', { class: 'series-row' }, [sField]);
           if (entry.series.length > 1) {
             row.appendChild(el('button', { class: 'series-remove', onclick: () => { entry.series.splice(si, 1); syncTotalQuantity(); render(); } }, ['⊖']));
