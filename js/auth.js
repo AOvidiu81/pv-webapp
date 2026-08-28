@@ -18,6 +18,7 @@ import { DEFAULT_AUXILIARY_BY_CATEGORY } from './catalog-defaults.js';
 
 const SUPABASE_URL = 'https://vvhvxshwmhiakuxnmckg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2aHZ4c2h3bWhpYWt1eG5tY2tnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NTM3NDAsImV4cCI6MjEwMzQyOTc0MH0.HqAlewj-VmntfOraM-Ps0joimGaUVB0mvUoHQgsVCfg';
+const FUNCTIONS_URL = SUPABASE_URL + '/functions/v1/admin-manage-users';
 
 // id local stabil pentru randul DriverRepo/CarRepo sincronizat din profilul
 // autentificat, ca sincronizarile repetate sa actualizeze acelasi rand
@@ -70,6 +71,67 @@ export async function signIn(username, password) {
     }
     return { error: 'Utilizator sau parola gresita' };
   }
+  const profile = await fetchOwnProfile(supabase, data.user.id);
+  if (!profile) {
+    await supabase.auth.signOut();
+    return { error: 'Nu am gasit profilul acestui cont' };
+  }
+  if (!profile.active) {
+    await supabase.auth.signOut();
+    return { error: 'Acest cont a fost dezactivat. Contacteaza administratorul.' };
+  }
+  await MetaRepo.set('lastProfile', profile);
+  return { profile };
+}
+
+/** Lista soferilor activi pentru ecranul de selectare de la pornirea
+ * aplicatiei (inainte de orice autentificare) — doar id + nume, nimic
+ * sensibil (username, masina etc. raman ascunse). */
+export async function listDriversForLogin() {
+  let supabase;
+  try {
+    supabase = await getSupabase();
+  } catch (e) {
+    return { error: 'Ai nevoie de internet ca sa vezi lista de soferi.' };
+  }
+  const { data, error } = await supabase.rpc('list_drivers_for_login');
+  if (error) return { error: 'Nu am putut incarca lista de soferi.' };
+  return { drivers: data || [] };
+}
+
+/** Autentificare FARA parola: soferul doar isi atinge numele din lista
+ * (populata din panoul de admin). Un Edge Function dedicat verifica
+ * server-side ca id-ul chiar corespunde unui cont de sofer activ, apoi
+ * emite un token de sesiune pe care il schimbam aici pe o sesiune reala
+ * Supabase — la fel de valida ca una obtinuta cu parola, doar ca fara sa
+ * fi tastat vreuna. Odata stabilita, sesiunea ramane pe telefon (la fel
+ * ca inainte), asa ca acest ecran nu mai reapare decat dupa deconectare
+ * explicita. */
+export async function signInAsDriver(driverId) {
+  let supabase;
+  try {
+    supabase = await getSupabase();
+  } catch (e) {
+    return { error: 'Autentificarea are nevoie de internet. Verifica conexiunea si incearca din nou.' };
+  }
+  let payload;
+  try {
+    const res = await fetch(FUNCTIONS_URL, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action: 'issue_driver_session', driver_id: driverId }),
+    });
+    payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.error || 'Cerere esuata');
+  } catch (e) {
+    return { error: 'Nu am putut incepe sesiunea: ' + e.message };
+  }
+  const { data, error } = await supabase.auth.verifyOtp({ token_hash: payload.token_hash, type: 'magiclink' });
+  if (error) return { error: 'Nu am putut incepe sesiunea.' };
   const profile = await fetchOwnProfile(supabase, data.user.id);
   if (!profile) {
     await supabase.auth.signOut();

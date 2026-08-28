@@ -1,12 +1,14 @@
-// screens-login.js — poarta de autentificare a aplicatiei: login cu user +
-// parola (contul e creat de administrator din panoul separat de admin),
-// urmat la prima utilizare de setarea obligatorie a semnaturii proprii.
-// Dupa asta, restul aplicatiei functioneaza neschimbat (si offline).
+// screens-login.js — poarta de autentificare a aplicatiei: soferul isi
+// selecteaza numele dintr-o lista (contul e creat de administrator din
+// panoul separat de admin), fara parola, urmat la prima utilizare de
+// setarea obligatorie a semnaturii proprii. Dupa asta, restul aplicatiei
+// functioneaza neschimbat (si offline) — sesiunea ramane pe telefon, deci
+// acest ecran nu mai reapare decat dupa o deconectare explicita.
 
 import { el, blobToDataUrl } from './utils.js';
 import { replaceRoot } from './router.js';
-import { textField, primaryButton, showToast, captureSignature } from './components.js';
-import { getCurrentProfile, signIn, signOut, saveOwnSignature, syncMasterData } from './auth.js';
+import { primaryButton, showToast, captureSignature } from './components.js';
+import { getCurrentProfile, listDriversForLogin, signInAsDriver, signOut, saveOwnSignature, syncMasterData } from './auth.js';
 
 /** Blocheaza pornirea aplicatiei pana cand exista un profil autentificat,
  * activ si cu semnatura setata. Intoarce acel profil. */
@@ -27,53 +29,69 @@ export async function runLoginGate() {
 
 function runLoginScreen() {
   return new Promise((resolve) => {
-    replaceRoot(() => {
-      const screen = el('div', { class: 'screen' });
-      const logo = el('img', { class: 'brand-logo', src: 'assets/logo/euro_ecologic_logo.png', alt: 'Euro Ecologic' });
+    let cancelled = false;
 
-      const userField = textField({ label: 'Utilizator', required: true });
-      const passField = textField({ label: 'Parola', type: 'password', required: true });
-      const errorBox = el('div', { style: 'color:var(--danger);font-size:13px;text-align:center;min-height:18px;margin-top:2px' }, []);
+    function render() {
+      replaceRoot(() => {
+        const screen = el('div', { class: 'screen' });
+        const logo = el('img', { class: 'brand-logo', src: 'assets/logo/euro_ecologic_logo.png', alt: 'Euro Ecologic' });
 
-      const loginBtn = primaryButton('Intra in cont', async () => {
-        const username = userField.input.value.trim();
-        const password = passField.input.value;
-        errorBox.textContent = '';
-        if (!username || !password) {
-          errorBox.textContent = 'Completeaza utilizatorul si parola.';
-          return;
-        }
-        loginBtn.disabled = true;
-        loginBtn.textContent = 'Se autentifica...';
-        const result = await signIn(username, password);
-        loginBtn.disabled = false;
-        loginBtn.textContent = 'Intra in cont';
-        if (result.error) {
-          errorBox.textContent = result.error;
-          return;
-        }
-        resolve(result.profile);
+        const statusBox = el('div', { style: 'text-align:center;color:var(--ink-soft);font-size:13.5px;margin:4px 0 2px' }, ['Se incarca lista de soferi...']);
+        const listBox = el('div', { style: 'display:flex;flex-direction:column;gap:10px;margin-top:4px' }, []);
+        const errorBox = el('div', { style: 'color:var(--danger);font-size:13px;text-align:center;min-height:18px;margin-top:6px' }, []);
+
+        const card = el('div', { class: 'section-card' }, [
+          el('h3', { class: 'section-title', style: 'text-align:center' }, ['Cine esti?']),
+          el('div', { style: 'text-align:center;color:var(--ink-soft);font-size:13px;margin-bottom:14px' }, [
+            'Alege-ti numele din lista — contul e creat de administrator.',
+          ]),
+          statusBox,
+          listBox,
+          errorBox,
+        ]);
+
+        const scroll = el('div', { class: 'screen-scroll', style: 'display:flex;flex-direction:column;justify-content:center;min-height:100%' }, [logo, card]);
+        screen.appendChild(scroll);
+
+        (async () => {
+          const result = await listDriversForLogin();
+          if (cancelled) return;
+          statusBox.remove();
+          if (result.error) {
+            errorBox.textContent = result.error;
+            listBox.appendChild(primaryButton('Incearca din nou', () => render()));
+            return;
+          }
+          if (!result.drivers.length) {
+            errorBox.textContent = 'Niciun sofer disponibil momentan. Contacteaza administratorul.';
+            listBox.appendChild(primaryButton('Reincarca', () => render()));
+            return;
+          }
+          for (const driver of result.drivers) {
+            const btn = primaryButton(driver.full_name, async () => {
+              const allButtons = Array.from(listBox.children);
+              allButtons.forEach((b) => (b.disabled = true));
+              errorBox.textContent = '';
+              btn.textContent = 'Se conecteaza...';
+              const signInResult = await signInAsDriver(driver.id);
+              if (cancelled) return;
+              if (signInResult.error) {
+                errorBox.textContent = signInResult.error;
+                allButtons.forEach((b) => (b.disabled = false));
+                btn.textContent = driver.full_name;
+                return;
+              }
+              resolve(signInResult.profile);
+            });
+            listBox.appendChild(btn);
+          }
+        })();
+
+        return screen;
       });
-      passField.input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') loginBtn.click();
-      });
+    }
 
-      const card = el('div', { class: 'section-card' }, [
-        el('h3', { class: 'section-title', style: 'text-align:center' }, ['Autentificare']),
-        el('div', { style: 'text-align:center;color:var(--ink-soft);font-size:13px;margin-bottom:14px' }, [
-          'Foloseste utilizatorul si parola primite de la administrator.',
-        ]),
-        userField,
-        passField,
-        errorBox,
-        el('div', { style: 'height:4px' }),
-        loginBtn,
-      ]);
-
-      const scroll = el('div', { class: 'screen-scroll', style: 'display:flex;flex-direction:column;justify-content:center;min-height:100%' }, [logo, card]);
-      screen.appendChild(scroll);
-      return screen;
-    });
+    render();
   });
 }
 
