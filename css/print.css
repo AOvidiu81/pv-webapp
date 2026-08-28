@@ -189,6 +189,7 @@
   font-size: 9.6pt;
   margin: 2mm 0 1.5mm;
 }
+.doc-return-message-p1 { margin-top: 3mm; }
 
 .doc-signature-table td { vertical-align: top; }
 .doc-signature-table thead th { font-size: 8.4pt; }

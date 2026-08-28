@@ -6,9 +6,9 @@
 // salvare in istoric). Include si un import rapid din text WhatsApp
 // (whatsapp-import.js) — completare aproximativa, de verificat manual.
 
-import { el, uuid, formatDateTimeRo, blobToDataUrl, withoutDiacritics } from './utils.js';
+import { el, uuid, formatDateTimeRo, blobToDataUrl, withoutDiacritics, countyAbbreviation, matchCountyCodeInText } from './utils.js';
 import { pushScreen } from './router.js';
-import { CatalogRepo, PvRepo, ClientLocationRepo } from './db.js';
+import { CatalogRepo, PvRepo, ClientLocationRepo, DepotRepo } from './db.js';
 import {
   textField,
   textAreaField,
@@ -102,6 +102,25 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
     auxByModel[c.model] = c.aux || [];
   });
   const savedModels = Object.keys(catalogByModel).sort();
+  // Toate depozitele configurate (inclusiv cele secundare/colaboratoare) —
+  // folosite pentru a determina automat, dupa codul de judet mentionat "La
+  // Contract" in comanda (ex: "HD", "Hunedoara"), la ce adresa de e-mail
+  // trebuie retrimis P.V.-ul semnat.
+  const allDepots = await DepotRepo.getAll().catch(() => []);
+
+  function resolveAvizReturnEmail(contractReferenceRaw) {
+    const code = matchCountyCodeInText(contractReferenceRaw);
+    if (code) {
+      const match = allDepots.find(
+        (d) => countyAbbreviation(d.name) === code && (d.representativeEmail || '').trim()
+      );
+      if (match) return match.representativeEmail.trim();
+    }
+    return (
+      (depot.representativeEmail || '').trim() ||
+      `${withoutDiacritics(depot.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '')}@eurowc.ro`
+    );
+  }
 
   return pushScreen(({ pop }) => {
     const needsAviz = NEEDS_AVIZ.has(processType);
@@ -574,6 +593,7 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         beneficiaryCiNumber: state.beneficiaryNr.trim(),
         beneficiarySignatureUrl: state.beneficiarySignatureUrl,
         contractReference: state.contractReference.trim(),
+        avizReturnEmail: resolveAvizReturnEmail(state.contractReference),
         driverSignatureUrl: driver.signatureDataUrl || '',
       };
     }

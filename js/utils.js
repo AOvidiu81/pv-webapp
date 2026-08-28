@@ -105,6 +105,26 @@ export function extractCountyFromAddress(address) {
   return (match[1] || '').split(',')[0].trim();
 }
 
+/** Cauta, intr-un text liber (ex: campul "La Contract" completat din
+ * comanda), un cod de judet cunoscut (HD, SB, CT, B, ...) — fie ca abreviere
+ * scrisa ca atare ("... HD"), fie ca numele intreg al judetului ("Hunedoara").
+ * Foloseste aceeasi lista COUNTY_CODES ca countyAbbreviation(), ca cele doua
+ * sa ramana mereu in sincron. Intoarce '' daca nu gaseste nimic. */
+export function matchCountyCodeInText(text) {
+  const norm = withoutDiacritics(text || '').toUpperCase();
+  if (!norm) return '';
+  const codeSet = new Set(Object.values(COUNTY_CODES));
+  const words = norm.match(/[A-Z]+/g) || [];
+  for (const w of words) {
+    if (codeSet.has(w)) return w;
+  }
+  const compact = norm.replace(/[^A-Z]/g, '');
+  for (const [name, code] of Object.entries(COUNTY_CODES)) {
+    if (compact.includes(name.replace(/[^A-Z]/g, ''))) return code;
+  }
+  return '';
+}
+
 export function extractLocationFromAddress(address) {
   const parts = (address || '').split(',').map((p) => p.trim()).filter(Boolean);
   for (const part of parts) {

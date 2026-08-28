@@ -244,6 +244,12 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
     ${conditionsBox(processTypeUpper)}
 
     ${
+      needsAviz
+        ? `<div class="doc-return-message doc-return-message-p1">VA ROG SA RETRIMITETI ACEST P.V. DE ${esc(processTypeUpper || 'AMPLASARE')}, SEMNAT SI STAMPILAT LA ADRESA DE EMAIL: ${esc(model.avizReturnEmail || '')}</div>`
+        : ''
+    }
+
+    ${
       soferObservations
         ? `<div class="doc-box doc-observatii-sofer">
             ${
@@ -281,7 +287,6 @@ function pageTwoAviz({ model, depotEmail, depotPhone, driverSignatureUrl, stampA
   const clientName = (model.clientName || '').trim().toUpperCase() || 'BENEFICIAR';
   const rows = avizRows(model);
   const dt = docDateTime(model.createdAt);
-  const returnMessage = `VA ROG SA RETRIMITETI ACEST P.V. DE ${processTypeUpper || 'AMPLASARE'}, SEMNAT SI STAMPILAT LA ADRESA DE EMAIL: ${depotEmail}`;
 
   return `
   <section class="doc-page">
@@ -340,7 +345,6 @@ function pageTwoAviz({ model, depotEmail, depotPhone, driverSignatureUrl, stampA
     <div class="doc-box doc-location-bar">Locatia ceruta de <strong>${esc(processTypeUpper)}</strong> : <strong>${esc(model.field1 ? model.field1.toUpperCase() : '-')}</strong></div>
 
     <div class="doc-aviz-spacer"></div>
-    <div class="doc-return-message">${esc(returnMessage)}</div>
 
     <table class="doc-table doc-signature-table">
       <thead>
