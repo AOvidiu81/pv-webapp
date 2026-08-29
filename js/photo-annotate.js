@@ -2,6 +2,29 @@
 // (client, cantitate, produse, data/ora, GPS, adresa, sofer/auto, nr PV/AVZ),
 // echivalent cu photo_annotation.dart (_annotatePhotoWithMetadataInBackground).
 
+// Logo-ul salvat in assets ("euro_ecologic_mark.png") e un simbol solid pe
+// fundal transparent, in albastrul de brand — il "recoloram" o singura data
+// intr-o varianta ALB, ca sa se potriveasca cu restul textului din banner
+// (asa cum arata si bannerul din aplicatia veche APK). Pastram rezultatul
+// intr-un cache (dupa referinta imaginii sursa), ca sa nu recalculam la
+// fiecare poza adnotata in aceeasi sesiune.
+const whiteLogoCache = new WeakMap();
+function toWhiteLogo(logoImg) {
+  if (!logoImg) return null;
+  if (whiteLogoCache.has(logoImg)) return whiteLogoCache.get(logoImg);
+  const c = document.createElement('canvas');
+  c.width = logoImg.naturalWidth || logoImg.width;
+  c.height = logoImg.naturalHeight || logoImg.height;
+  const cctx = c.getContext('2d');
+  cctx.drawImage(logoImg, 0, 0, c.width, c.height);
+  // pastram doar forma (alfa) logo-ului, umplem restul cu alb
+  cctx.globalCompositeOperation = 'source-in';
+  cctx.fillStyle = '#ffffff';
+  cctx.fillRect(0, 0, c.width, c.height);
+  whiteLogoCache.set(logoImg, c);
+  return c;
+}
+
 function wrapLine(line, maxChars) {
   const normalized = line.replace(/\s+/g, ' ').trim();
   if (!normalized) return [];
@@ -50,13 +73,16 @@ export async function annotatePhotoWithMetadata(sourceBlob, lines, depotName, lo
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0, width, height);
 
+  const whiteLogo = toWhiteLogo(logoImg);
   const cleanLines = lines.map((l) => l.trim()).filter(Boolean);
   const margin = Math.min(24, Math.max(10, Math.round(width * 0.016)));
-  const logoH = logoImg ? 40 : 0;
-  const headerHeight = Math.min(90, Math.max(50, logoH + 16));
-  const lineHeight = 22;
-  const fontSize = 15;
-  const titleFontSize = 20;
+  const logoH = whiteLogo ? 50 : 0;
+  const headerHeight = Math.min(104, Math.max(60, logoH + 20));
+  // Font marit fata de versiunea initiala — la testare pe telefon textul de
+  // 15px/20px iesea prea mic ca sa fie citit confortabil in poza finala.
+  const lineHeight = 27;
+  const fontSize = 19;
+  const titleFontSize = 26;
 
   ctx.font = `600 ${fontSize}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
   const maxBannerWidth = width - 2 * margin;
@@ -90,8 +116,8 @@ export async function annotatePhotoWithMetadata(sourceBlob, lines, depotName, lo
   // acolo, pentru comenzi cu text lung).
   const rightPad = 14;
   const textLeftPad = 12;
-  const logoW = logoImg ? (logoH / logoImg.height) * logoImg.width : 0;
-  const titleLeftOffset = logoImg ? 10 + logoW + 14 : 14;
+  const logoW = whiteLogo ? (logoH / whiteLogo.height) * whiteLogo.width : 0;
+  const titleLeftOffset = whiteLogo ? 10 + logoW + 14 : 14;
 
   ctx.font = `700 ${titleFontSize}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
   let neededWidth = titleLeftOffset + ctx.measureText(depotName).width + rightPad;
@@ -112,8 +138,8 @@ export async function annotatePhotoWithMetadata(sourceBlob, lines, depotName, lo
   ctx.fill();
 
   let titleX = startX + 14;
-  if (logoImg) {
-    ctx.drawImage(logoImg, startX + 10, startY + 8, logoW, logoH);
+  if (whiteLogo) {
+    ctx.drawImage(whiteLogo, startX + 10, startY + 8, logoW, logoH);
     titleX = startX + 10 + logoW + 14;
   }
   ctx.fillStyle = '#ffffff';

@@ -112,6 +112,21 @@ export async function renderDocPagesToJpegs(html, { scale = 1.6, quality = 0.85 
   document.body.appendChild(host);
   try {
     const pages = Array.from(host.querySelectorAll('.doc-page'));
+    // IMPORTANT: fortam o inaltime FIXA (nu doar min-height, cat e definit
+    // in afara @media print) inainte sa masuram pagina. Fara asta, o pagina
+    // cu continut inalt (ex: Anexa Foto, unde ".doc-annex-photo-frame" are
+    // flex:1) poate creste peste 297mm real in acest context offscreen —
+    // bitmap-ul rezultat nu mai are proportia A4, iar la asamblarea PDF-ului
+    // (unde imaginea e intinsa fortat pe un dreptunghi A4 fix) TOATA pagina
+    // iese vizibil deformata (poza, antet, footer — tot pare "stretch").
+    // Acelasi motiv pentru care exista deja regula echivalenta in print.css,
+    // sub @media print — aici o aplicam manual, ca acest randor offscreen nu
+    // trece prin acel context.
+    pages.forEach((page) => {
+      page.style.height = '297mm';
+      page.style.minHeight = '297mm';
+      page.style.overflow = 'hidden';
+    });
     const cssText = await getPrintCssText();
     const results = [];
     for (const page of pages) {
