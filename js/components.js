@@ -290,9 +290,25 @@ function captureSignatureScreen(title) {
     // (mult mai lat, gol in cea mai mare parte, dupa blocarea landscape).
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
+    // Cauza reala a bug-ului "aluneca in jos": .signature-row si
+    // .signature-canvas-wrap nu aveau min-height:0 (vezi styles.css) — fara
+    // el, un flex item cu continut care primeste o dimensiune EXPLICITA (ca
+    // aici, canvas.style.width/height, setate de noi mai jos) isi poate
+    // impinge parintele sa creasca dupa continut, in loc sa fie limitat de
+    // spatiul disponibil. La fiecare resize() facut de ResizeObserver,
+    // continerul masurat era putin mai mare decat data trecuta, ceea ce
+    // facea ca urmatorul resize() sa-l creasca din nou — o bucla care crestea
+    // ecranul de semnatura la nesfarsit (de-aia butoanele pareau ca "aluneca
+    // in jos" cu fiecare secunda). Fix-ul real e min-height:0 in CSS; ramane
+    // aici si o garda (rotunjire + prag) care opreste orice resize() inutil
+    // daca dimensiunea masurata nu s-a schimbat cu adevarat.
+    let lastW = 0, lastH = 0;
     function resize() {
       const rect = canvasWrap.getBoundingClientRect();
       if (!rect.width || !rect.height) return; // containerul inca nu are dimensiuni (ecran in tranzitie)
+      if (Math.abs(rect.width - lastW) < 0.5 && Math.abs(rect.height - lastH) < 0.5) return;
+      lastW = rect.width;
+      lastH = rect.height;
       const ratio = window.devicePixelRatio || 1;
       canvas.width = rect.width * ratio;
       canvas.height = rect.height * ratio;
