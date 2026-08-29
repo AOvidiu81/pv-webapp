@@ -25,6 +25,32 @@ function toWhiteLogo(logoImg) {
   return c;
 }
 
+// Raportul de aspect (latime:inaltime) al cadrului "Anexa Foto" din
+// documentul tiparit (.doc-annex-photo-frame, vezi print.css): pagina A4
+// (210x297mm) minus margini (10mm sus, 14mm stanga/dreapta, 8mm jos) minus
+// antet/titlu/subsol ramase ≈182mm latime x ≈227mm inaltime ≈ 0.80 — foarte
+// aproape de 4/5, exact ce isi amintea utilizatorul de la aplicatia veche
+// (APK). Decupam poza sursa (centrat, ca un "cover") la acest raport
+// INAINTE de a o adnota, ca sa umple aproape tot cadrul in PDF, indiferent
+// de formatul nativ al camerei telefonului (4:3, 16:9, etc) — fara sa
+// denatureze imaginea (nu o intindem, doar taiem marginile in exces).
+const TARGET_ASPECT = 4 / 5;
+
+function cropRectForAspect(srcWidth, srcHeight, targetAspect) {
+  const srcAspect = srcWidth / srcHeight;
+  let sx = 0, sy = 0, sw = srcWidth, sh = srcHeight;
+  if (srcAspect > targetAspect) {
+    // sursa mai LATA decat cadrul tinta -> taiem simetric pe laterale
+    sw = Math.round(srcHeight * targetAspect);
+    sx = Math.round((srcWidth - sw) / 2);
+  } else if (srcAspect < targetAspect) {
+    // sursa mai INALTA decat cadrul tinta -> taiem simetric sus/jos
+    sh = Math.round(srcWidth / targetAspect);
+    sy = Math.round((srcHeight - sh) / 2);
+  }
+  return { sx, sy, sw, sh };
+}
+
 function wrapLine(line, maxChars) {
   const normalized = line.replace(/\s+/g, ' ').trim();
   if (!normalized) return [];
@@ -62,27 +88,45 @@ function wrapLine(line, maxChars) {
  */
 export async function annotatePhotoWithMetadata(sourceBlob, lines, depotName, logoImg) {
   const img = await blobToImage(sourceBlob);
-  const maxWidth = 1600;
-  const scale = img.width > maxWidth ? maxWidth / img.width : 1;
-  const width = Math.round(img.width * scale);
-  const height = Math.round(img.height * scale);
+  const crop = cropRectForAspect(img.width, img.height, TARGET_ASPECT);
+  // 2000px (fata de 1600px inainte): rezolutie mai mare, ca textul din
+  // banner sa nu para "pixelat" la zoom in vizualizatorul de PDF.
+  const maxWidth = 2000;
+  const scale = crop.sw > maxWidth ? maxWidth / crop.sw : 1;
+  const width = Math.round(crop.sw * scale);
+  const height = Math.round(crop.sh * scale);
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, width, height);
+  ctx.drawImage(img, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, width, height);
 
   const whiteLogo = toWhiteLogo(logoImg);
   const cleanLines = lines.map((l) => l.trim()).filter(Boolean);
-  const margin = Math.min(24, Math.max(10, Math.round(width * 0.016)));
-  const logoH = whiteLogo ? 50 : 0;
-  const headerHeight = Math.min(104, Math.max(60, logoH + 20));
-  // Font marit fata de versiunea initiala — la testare pe telefon textul de
-  // 15px/20px iesea prea mic ca sa fie citit confortabil in poza finala.
-  const lineHeight = 27;
-  const fontSize = 19;
-  const titleFontSize = 26;
+  const margin = Math.min(30, Math.max(12, Math.round(width * 0.016)));
+  // Marimile din banner (font, logo) sunt calculate ca sa dea o dimensiune
+  // FIXA pe pagina TIPARITA, nu un numar fix de pixeli — cadrul "Anexa Foto"
+  // din PDF (.doc-annex-photo-frame, print.css) umple ≈182mm latime din
+  // pagina A4 ≈ 516pt, indiferent de rezolutia nativa a pozei; daca am folosi
+  // un font fix in pixeli, el ar iesi tiparit la marimi diferite in functie
+  // de camera telefonului (o poza de rezolutie mica ar avea text URIAS, una
+  // de rezolutie mare ar avea text MINUSCUL — exact problema semnalata:
+  // "abia se citeste, si daca maresc, se pixeleaza"). Calculam deci fontul
+  // ca fractiune din latimea FINALA a imaginii (dupa decupare+scalare),
+  // tintind ≈8.5pt text si ≈12pt titlu pe pagina tiparita (comparabil cu
+  // restul textului din document: vezi print.css .doc-table 8.6pt, .doc-title
+  // 15pt) — verificat empiric cu Playwright (poze test la rezolutii diferite,
+  // toate ies la aceeasi marime tiparita).
+  const MM_TO_PT = 2.83465;
+  const FRAME_WIDTH_PT = 182 * MM_TO_PT; // latimea cadrului Anexa Foto in PDF
+  const TARGET_BODY_PT = 8.5;
+  const TARGET_TITLE_PT = 12;
+  const fontSize = Math.round((TARGET_BODY_PT * width) / FRAME_WIDTH_PT);
+  const titleFontSize = Math.round((TARGET_TITLE_PT * width) / FRAME_WIDTH_PT);
+  const lineHeight = Math.round(fontSize * 1.4);
+  const logoH = whiteLogo ? Math.round(titleFontSize * 1.6) : 0;
+  const headerHeight = Math.round(logoH + fontSize * 0.9);
 
   ctx.font = `600 ${fontSize}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
   const maxBannerWidth = width - 2 * margin;

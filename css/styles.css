@@ -215,10 +215,43 @@ select.field-input { appearance: none; background-image: linear-gradient(45deg, 
 
 /* Signature screen */
 .signature-screen { display: flex; flex-direction: column; height: 100%; background: var(--surface); }
-.signature-row { flex: 1; display: flex; align-items: stretch; gap: 12px; padding: 10px 14px; min-height: 0; }
+/* Bara de sus (titlu, buton Inapoi) si textul de ajutor de jos raman
+   NEROTITE — se citesc normal, fara sa fie nevoie sa intorci telefonul.
+   SINGURA zona rotita e chenarul de desenat (.signature-row), care trebuie
+   sa fie mereu "landscape" (lat), indiferent daca API-ul Screen Orientation
+   reuseste sa roteasca fizic telefonul (pe multe telefoane/browsere nu
+   functioneaza deloc in afara modului fullscreen — vezi istoricul din
+   components.js). In loc sa depindem de asta, rotim noi insine cu CSS doar
+   acest chenar, 90 de grade, ca sa umple exact spatiul rezervat de
+   .signature-row-wrap (width/height ii sunt setate din JS, in pixeli,
+   INTERSCHIMBATE fata de wrap — vezi ResizeObserver-ul din
+   captureSignatureScreen()). Soferul roteste telefonul fizic ca sa
+   citeasca acest chenar normal — dar acum functioneaza garantat, pe orice
+   telefon/browser, indiferent daca e instalat ca aplicatie sau deschis
+   intr-un tab obisnuit. */
+.signature-row-wrap { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+.signature-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  /* O rotatie CSS pastreaza unghiurile relative dintre axe: daca am lasa
+     flex-direction:row (clear/canvas/ok orizontal, ca-n forma nerotita) si
+     am roti tot chenarul cu 90°, rezultatul ar iesi din nou ingust pe
+     verticala (exact ce vrem sa eliminam). De-aia folosim column AICI — o
+     rasucire "inversa" facuta dinainte, ca dupa rotatia CSS rezultatul
+     vazut de sofer sa arate lat: rosu/verde pe laterale, canvas lat la
+     mijloc. Verificat empiric cu Playwright (capturi de ecran + gesturi). */
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 10px 14px;
+  transform-origin: top left;
+  transform: rotate(90deg) translateY(-100%);
+}
 .signature-canvas-wrap { flex: 1; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); position: relative; overflow: hidden; touch-action: none; min-height: 0; min-width: 0; }
 .signature-canvas { width: 100%; height: 100%; touch-action: none; display: block; }
-.sig-side-btn { width: 56px; border: none; border-radius: 12px; font-size: 22px; display: flex; align-items: center; justify-content: center; }
+.sig-side-btn { height: 56px; width: auto; border: none; border-radius: 12px; font-size: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .sig-clear { background: #f7d9df; color: #8f3145; }
 .sig-ok { background: #ddf4d7; color: #256b29; }
 .signature-hint { text-align: center; font-size: 12.5px; color: var(--ink-soft); padding: 0 20px calc(22px + env(safe-area-inset-bottom, 0px)); }
@@ -235,6 +268,7 @@ select.field-input { appearance: none; background-image: linear-gradient(45deg, 
 .gps-ring-value { font-size: 24px; font-weight: 700; }
 .gps-ring-label { font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-top: 4px; }
 .gps-coords { margin-top: 22px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 12px 16px; text-align: center; font-family: monospace; font-size: 13px; color: rgba(255,255,255,0.8); }
+.gps-location { margin-top: 10px; text-align: center; font-size: 13px; color: rgba(255,255,255,0.75); padding: 0 8px; }
 .gps-status { margin-top: 18px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.6); }
 .gps-spacer { flex: 1; }
 .gps-action-btn { background: #3a4658; color: rgba(255,255,255,0.4); margin-top: 10px; }

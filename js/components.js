@@ -207,25 +207,6 @@ export function outlineButton(label, onClick, { icon, disabled = false, error = 
 // ------------------------------------------------------------------
 // Blocare orientare landscape — ca in aplicatia veche (APK): la semnat
 // (indiferent daca e semnatura proprie a soferului sau a beneficiarului),
-// telefonul trece fortat pe orizontala, ca zona de semnat sa fie cat mai
-// lata. Incercam DOAR lock() direct — functioneaza fara Fullscreen API cand
-// aplicatia ruleaza instalata ca PWA (mod "standalone", cazul real de
-// utilizare pe telefoanele soferilor). Am renuntat deliberat la fallback-ul
-// prin Fullscreen API (folosit anterior cand lock() direct esua, ex: in tab
-// obisnuit de Chrome, neinstalat): pe langa faptul ca declansa un banner
-// nativ ("ai intrat in ecran complet") care nu poate fi inlaturat din cod,
-// tranzitia efectiva spre fullscreen putea intra in coliziune cu gesturile
-// de desenat, facand semnatura sa nu se salveze corect chiar in acele prime
-// momente. Daca lock() esueaza (iOS Safari nu implementeaza deloc API-ul,
-// sau tab obisnuit neinstalat), esuam silentios — soferul poate roti manual.
-async function lockLandscape() {
-  try {
-    await screen.orientation.lock('landscape');
-  } catch (e) {
-    // ok, nu blocam semnarea — vezi comentariul de mai sus
-  }
-}
-
 // Vibratie scurta la apasarea butoanelor de confirmare/stergere semnatura —
 // acelasi feedback tactil ca in aplicatia veche (APK). Vibration API nu e
 // suportata pe iOS Safari, deci esuam silentios acolo.
@@ -235,33 +216,30 @@ function hapticTap() {
   } catch (e) {}
 }
 
-function unlockOrientation() {
-  try {
-    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
-  } catch (e) {}
-  try {
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  } catch (e) {}
-}
-
 // ------------------------------------------------------------------
 // Signature pad (canvas) — ecran complet, folosit prin pushScreen()
 // ------------------------------------------------------------------
-export async function captureSignature({ title = 'Semnatura' } = {}) {
-  await lockLandscape();
-  try {
-    return await captureSignatureScreen(title);
-  } finally {
-    unlockOrientation();
-  }
+// NU mai folosim Screen Orientation API (screen.orientation.lock) ca sa
+// fortam telefonul pe orizontala — pe multe telefoane/browsere API-ul
+// esueaza silentios in afara modului fullscreen (vezi istoricul acestei
+// functii), asa ca zona de semnat ramanea pe verticala desi soferul tinea
+// telefonul intors, iar semnatura iesea "stramba"/ingusta. In loc sa
+// depindem de asta, rotim NOI ecranul cu CSS (vezi .signature-screen din
+// styles.css) — functioneaza garantat, pe orice telefon/browser,
+// indiferent de starea de instalare. Soferul tot trebuie sa intoarca
+// telefonul fizic ca sa citeasca ecranul corect, dar acum layout-ul e mereu
+// landscape indiferent daca browserul "stie" sau nu ca s-a rotit.
+export function captureSignature({ title = 'Semnatura' } = {}) {
+  return captureSignatureScreen(title);
 }
 
 function captureSignatureScreen(title) {
-  // Referinta ridicata in afara builder-ului lui pushScreen(), ca sa putem
-  // opri urmarirea dimensiunii containerului cand ecranul se inchide,
-  // indiferent cum iese soferul din el (buton, salvare sau Back hardware) —
-  // vezi promise.finally() mai jos.
+  // Referinte ridicate in afara builder-ului lui pushScreen(), ca sa putem
+  // opri urmarirea dimensiunilor cand ecranul se inchide, indiferent cum
+  // iese soferul din el (buton, salvare sau Back hardware) — vezi
+  // promise.finally() mai jos.
   let resizeObserver = null;
+  let rowResizeObserver = null;
   const promise = pushScreen(({ pop }) => {
     const canvasWrap = el('div', { class: 'signature-canvas-wrap' });
     const canvas = el('canvas', { class: 'signature-canvas' });
@@ -275,10 +253,36 @@ function captureSignatureScreen(title) {
     ]);
     const clearBtn = el('button', { class: 'sig-side-btn sig-clear', onclick: () => { hapticTap(); clear(); } }, ['⟲']);
     const okBtn = el('button', { class: 'sig-side-btn sig-ok', onclick: () => { hapticTap(); save(); } }, ['✓']);
-    const row = el('div', { class: 'signature-row' }, [clearBtn, canvasWrap, okBtn]);
+    // Ordinea in DOM aici e [ok, canvas, clear] (nu [clear, canvas, ok]) —
+    // dupa rotatia CSS a chenarului de desenat, primul copil ajunge pe
+    // marginea DREAPTA vazuta de sofer (verificat empiric cu Playwright),
+    // asa ca punem verde primul ca sa iasa dreapta si rosu ultimul ca sa
+    // iasa stanga — la fel ca in schema originala (rosu stanga, verde dreapta).
+    const row = el('div', { class: 'signature-row' }, [okBtn, canvasWrap, clearBtn]);
+    // rowWrap ocupa spatiul NORMAL (nerotit) din layout-ul coloanei
+    // (topbar/rowWrap/hint) — cat spatiu ramane dupa bara de sus si textul
+    // de jos. row (continutul chenarului) e absolut pozitionat in interior
+    // si rotit cu 90°, cu latime/inaltime setate mai jos din JS, in pixeli,
+    // INTERSCHIMBATE fata de dimensiunile masurate ale lui rowWrap — asta e
+    // trucul care face chenarul sa umple exact spatiul disponibil, oricat
+    // de mare/mic ar fi el pe telefonul respectiv.
+    const rowWrap = el('div', { class: 'signature-row-wrap' }, [row]);
     screen.appendChild(topBar);
-    screen.appendChild(row);
+    screen.appendChild(rowWrap);
     screen.appendChild(el('div', { class: 'signature-hint' }, ['Semneaza in chenar folosind degetul sau stylus-ul.']));
+
+    function resizeRow() {
+      const wrapRect = rowWrap.getBoundingClientRect();
+      if (!wrapRect.width || !wrapRect.height) return;
+      row.style.width = wrapRect.height + 'px';
+      row.style.height = wrapRect.width + 'px';
+    }
+    if (window.ResizeObserver) {
+      rowResizeObserver = new ResizeObserver(resizeRow);
+      rowResizeObserver.observe(rowWrap);
+    } else {
+      requestAnimationFrame(resizeRow);
+    }
 
     const ctx = canvas.getContext('2d');
     let drawing = false;
@@ -304,16 +308,27 @@ function captureSignatureScreen(title) {
     // daca dimensiunea masurata nu s-a schimbat cu adevarat.
     let lastW = 0, lastH = 0;
     function resize() {
-      const rect = canvasWrap.getBoundingClientRect();
-      if (!rect.width || !rect.height) return; // containerul inca nu are dimensiuni (ecran in tranzitie)
-      if (Math.abs(rect.width - lastW) < 0.5 && Math.abs(rect.height - lastH) < 0.5) return;
-      lastW = rect.width;
-      lastH = rect.height;
+      // IMPORTANT: folosim clientWidth/clientHeight (dimensiunea LOCALA de
+      // layout a lui canvasWrap, neafectata de transform-uri), NU
+      // getBoundingClientRect() (care da dreptunghiul FINAL, dupa rotatia
+      // CSS aplicata de .signature-row). canvas.style.width/height sunt
+      // proprietati LOCALE — canvas mosteneste ACEEASI rotatie de la
+      // stramosul comun (row), asa ca daca i-am da dimensiunea deja rotita
+      // a lui canvasWrap, rotatia s-ar aplica a DOUA oara si canvas-ul ar
+      // iesi cu proportii gresite, in afara ecranului (bug depistat empiric
+      // cu Playwright: canvas aparea deplasat, cu latime/inaltime inversate
+      // fata de canvasWrap).
+      const w = canvasWrap.clientWidth;
+      const h = canvasWrap.clientHeight;
+      if (!w || !h) return; // containerul inca nu are dimensiuni (ecran in tranzitie)
+      if (Math.abs(w - lastW) < 0.5 && Math.abs(h - lastH) < 0.5) return;
+      lastW = w;
+      lastH = h;
       const ratio = window.devicePixelRatio || 1;
-      canvas.width = rect.width * ratio;
-      canvas.height = rect.height * ratio;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
+      canvas.width = w * ratio;
+      canvas.height = h * ratio;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
       ctx.scale(ratio, ratio);
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
@@ -341,10 +356,18 @@ function captureSignatureScreen(title) {
       }, 350);
     }
 
+    // canvas.getBoundingClientRect() ne da deja dreptunghiul CORECT (rotit)
+    // in coordonate de viewport — dar clientX/clientY ale evenimentelor de
+    // touch/mouse raman mereu in coordonate de viewport NEROTITE. Pentru
+    // .signature-screen, rotit cu rotate(90deg) (in sensul acelor de
+    // ceasornic), transformarea inversa (viewport -> local canvas) este:
+    // x local = clientY - rect.top, y local = rect.right - clientX
+    // (verificat empiric cu Playwright: un gest desenat de-a lungul zonei
+    // late de semnat produce o cerneala lata, nu ingusta/verticala).
     function pointFromEvent(e) {
       const rect = canvas.getBoundingClientRect();
       const point = e.touches ? e.touches[0] : e;
-      return { x: point.clientX - rect.left, y: point.clientY - rect.top };
+      return { x: point.clientY - rect.top, y: rect.right - point.clientX };
     }
     function extendBounds(p) {
       if (p.x < minX) minX = p.x;
@@ -378,8 +401,9 @@ function captureSignatureScreen(title) {
     window.addEventListener('pointerup', end);
 
     function clear() {
-      const rect = canvasWrap.getBoundingClientRect();
-      ctx.clearRect(0, 0, rect.width, rect.height);
+      // La fel ca in resize(): dimensiunea LOCALA (clientWidth/clientHeight),
+      // nu dreptunghiul rotit din getBoundingClientRect().
+      ctx.clearRect(0, 0, canvasWrap.clientWidth, canvasWrap.clientHeight);
       hasStrokes = false;
       minX = Infinity;
       minY = Infinity;
@@ -428,7 +452,48 @@ function captureSignatureScreen(title) {
   });
   return promise.finally(() => {
     if (resizeObserver) resizeObserver.disconnect();
+    if (rowResizeObserver) rowResizeObserver.disconnect();
   });
+}
+
+// Distanta (in metri) intre doua puncte GPS — folosita ca sa nu re-cerem
+// adresa la fiecare update minor de pozitie (formula Haversine).
+function distanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Traduce coordonatele GPS in judet/localitate/strada, folosind serviciul
+// gratuit de reverse-geocoding OpenStreetMap Nominatim (nu necesita cheie
+// API). Daca soferul nu are semnal de internet in acel moment, sau
+// serviciul e indisponibil, esuam silentios — verificarea de acuratete GPS
+// (functia principala a acestui ecran) nu depinde deloc de asta.
+// Politica de utilizare Nominatim (operations.osmfoundation.org/policies/
+// nominatim) impune maxim 1 cerere/secunda pe TOATA aplicatia (nu per
+// utilizator) — pastram momentul ultimei cereri la nivel de modul, ca
+// pragul sa fie respectat chiar daca ecranul GPS e deschis/inchis repede.
+let lastNominatimRequestAt = 0;
+async function reverseGeocodeLabel(lat, lon) {
+  const now = Date.now();
+  if (now - lastNominatimRequestAt < 1100) return null; // prea devreme, incercam la urmatorul update de pozitie
+  lastNominatimRequestAt = now;
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=ro`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'ro' } });
+  if (!res.ok) throw new Error('reverse geocode http ' + res.status);
+  const data = await res.json();
+  const a = data.address || {};
+  const judet = a.county || a.state || '';
+  const localitate = a.city || a.town || a.village || a.municipality || a.suburb || '';
+  const strada = [a.road, a.house_number].filter(Boolean).join(' ');
+  const parts = [];
+  if (judet) parts.push(`Jud. ${judet}`);
+  if (localitate) parts.push(localitate);
+  if (strada) parts.push(strada);
+  return parts.join(', ');
 }
 
 // ------------------------------------------------------------------
@@ -447,17 +512,44 @@ export async function gpsAccuracyGate() {
     const ringLabel = el('div', { class: 'gps-ring-label' }, ['GPS...']);
     ring.appendChild(ringLabel);
     const coordsBox = el('div', { class: 'gps-coords', style: 'display:none' });
+    const locationLine = el('div', { class: 'gps-location', style: 'display:none' });
     const status = el('div', { class: 'gps-status' }, ['Se cauta semnal GPS...']);
     const actionBtn = el('button', { class: 'btn btn-block gps-action-btn', disabled: true }, ['Asteptam precizie GPS...']);
     const skipBtn = el('button', { class: 'btn btn-text gps-skip' }, ['Sari peste verificare GPS']);
     skipBtn.addEventListener('click', () => pop('skip'));
 
     screen.appendChild(topBar);
-    const content = el('div', { class: 'gps-content' }, [ring, coordsBox, status, el('div', { class: 'gps-spacer' }), actionBtn, skipBtn]);
+    const content = el('div', { class: 'gps-content' }, [ring, coordsBox, locationLine, status, el('div', { class: 'gps-spacer' }), actionBtn, skipBtn]);
     screen.appendChild(content);
 
     let watchId = null;
     let bestPosition = null;
+    // Urmarim ultimul punct pentru care am cerut deja adresa, ca sa nu
+    // batem la usa Nominatim la fiecare update minor de pozitie (watchPosition
+    // poate emite de multe ori pe secunda) — re-cerem doar daca soferul s-a
+    // mutat cu adevarat (>25m) sau la prima pozitie primita.
+    let geocoding = false;
+    let lastGeocodedAt = null; // {lat, lon}
+
+    async function updateLocationLine(position) {
+      const { latitude, longitude } = position.coords;
+      if (geocoding) return;
+      if (lastGeocodedAt && distanceMeters(lastGeocodedAt.lat, lastGeocodedAt.lon, latitude, longitude) < 25) return;
+      geocoding = true;
+      try {
+        const label = await reverseGeocodeLabel(latitude, longitude);
+        if (label === null) return; // throttled — reincercam la urmatorul update
+        lastGeocodedAt = { lat: latitude, lon: longitude };
+        if (label) {
+          locationLine.textContent = `${label} · sursa: OpenStreetMap`;
+          locationLine.style.display = '';
+        }
+      } catch (e) {
+        // esuam silentios — vezi comentariul de la reverseGeocodeLabel()
+      } finally {
+        geocoding = false;
+      }
+    }
 
     function colorFor(accuracy) {
       if (accuracy <= THRESHOLD) return '#2E7D32';
@@ -485,6 +577,7 @@ export async function gpsAccuracyGate() {
       coordsBox.innerHTML = '';
       coordsBox.appendChild(el('div', {}, [`LAT: ${position.coords.latitude.toFixed(6)}`]));
       coordsBox.appendChild(el('div', {}, [`LNG: ${position.coords.longitude.toFixed(6)}`]));
+      updateLocationLine(position);
 
       const goodEnough = accuracy <= THRESHOLD;
       status.textContent =

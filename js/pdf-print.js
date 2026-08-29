@@ -95,7 +95,11 @@ function avizRows(model) {
   modelEntries.forEach((combined, i) => {
     const split = splitModelType(combined);
     const seriesGroup = i < seriesGroups.length ? seriesGroups[i] : '';
-    const seriesFormatted = seriesGroup.split(',').map((s) => s.trim()).filter(Boolean).join(', ');
+    // La fel ca in tabelul de produse de pe pagina PV (formatSeriesCell,
+    // care aplica withSeriesPrefix), seriile trebuie afisate cu prefixul
+    // "EE-" si in tabelul Aviz — inainte, aici se afisa doar partea
+    // variabila tastata de sofer (ex: "S23" in loc de "EE-S23").
+    const seriesFormatted = seriesGroup.split(',').map((s) => s.trim()).filter(Boolean).map(withSeriesPrefix).join(', ');
     const baseDenumire = split.type ? `${split.model} - ${split.type}` : split.model;
     const denumire = seriesFormatted ? `${baseDenumire} | ${seriesFormatted}` : baseDenumire;
     const cant = seriesFormatted
