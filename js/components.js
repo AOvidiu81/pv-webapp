@@ -208,25 +208,21 @@ export function outlineButton(label, onClick, { icon, disabled = false, error = 
 // Blocare orientare landscape — ca in aplicatia veche (APK): la semnat
 // (indiferent daca e semnatura proprie a soferului sau a beneficiarului),
 // telefonul trece fortat pe orizontala, ca zona de semnat sa fie cat mai
-// lata. Screen Orientation API cere de obicei ca pagina sa fie in
-// fullscreen inainte sa permita lock() — incercam intai direct (functioneaza
-// uneori si fara, mai ales cand aplicatia ruleaza instalata ca PWA), apoi cu
-// fullscreen ca rezerva. Daca niciuna nu e suportata (ex: iOS Safari, care nu
-// implementeaza deloc lock()), esuam silentios — soferul poate roti manual.
+// lata. Incercam DOAR lock() direct — functioneaza fara Fullscreen API cand
+// aplicatia ruleaza instalata ca PWA (mod "standalone", cazul real de
+// utilizare pe telefoanele soferilor). Am renuntat deliberat la fallback-ul
+// prin Fullscreen API (folosit anterior cand lock() direct esua, ex: in tab
+// obisnuit de Chrome, neinstalat): pe langa faptul ca declansa un banner
+// nativ ("ai intrat in ecran complet") care nu poate fi inlaturat din cod,
+// tranzitia efectiva spre fullscreen putea intra in coliziune cu gesturile
+// de desenat, facand semnatura sa nu se salveze corect chiar in acele prime
+// momente. Daca lock() esueaza (iOS Safari nu implementeaza deloc API-ul,
+// sau tab obisnuit neinstalat), esuam silentios — soferul poate roti manual.
 async function lockLandscape() {
   try {
     await screen.orientation.lock('landscape');
-    return;
   } catch (e) {
-    // continuam cu incercarea prin fullscreen mai jos
-  }
-  try {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      await document.documentElement.requestFullscreen();
-    }
-    await screen.orientation.lock('landscape');
-  } catch (e) {
-    // orientarea nu poate fi fortata pe acest dispozitiv/browser — ok, nu blocam semnarea
+    // ok, nu blocam semnarea — vezi comentariul de mai sus
   }
 }
 
@@ -261,7 +257,12 @@ export async function captureSignature({ title = 'Semnatura' } = {}) {
 }
 
 function captureSignatureScreen(title) {
-  return pushScreen(({ pop }) => {
+  // Referinta ridicata in afara builder-ului lui pushScreen(), ca sa putem
+  // opri urmarirea dimensiunii containerului cand ecranul se inchide,
+  // indiferent cum iese soferul din el (buton, salvare sau Back hardware) —
+  // vezi promise.finally() mai jos.
+  let resizeObserver = null;
+  const promise = pushScreen(({ pop }) => {
     const canvasWrap = el('div', { class: 'signature-canvas-wrap' });
     const canvas = el('canvas', { class: 'signature-canvas' });
     canvasWrap.appendChild(canvas);
@@ -291,6 +292,7 @@ function captureSignatureScreen(title) {
 
     function resize() {
       const rect = canvasWrap.getBoundingClientRect();
+      if (!rect.width || !rect.height) return; // containerul inca nu are dimensiuni (ecran in tranzitie)
       const ratio = window.devicePixelRatio || 1;
       canvas.width = rect.width * ratio;
       canvas.height = rect.height * ratio;
@@ -302,15 +304,26 @@ function captureSignatureScreen(title) {
       ctx.lineJoin = 'round';
       ctx.strokeStyle = '#1B2F6B';
     }
-    requestAnimationFrame(resize);
-    // rotatia in landscape (lockLandscape) se poate finaliza asincron, dupa
-    // ce ecranul e deja montat — mai facem un resize putin mai tarziu, ca
-    // suprafata de desenat sa preia dimensiunile corecte. Facem asta DOAR
-    // daca soferul nu a inceput deja sa semneze intre timp — altfel am
-    // reseta canvas-ul (si sterge semnatura) chiar in timp ce se deseneaza.
-    setTimeout(() => {
-      if (!hasStrokes) resize();
-    }, 350);
+    // Urmarim CONTINUU dimensiunea reala a zonei de desenat, nu doar o
+    // singura data la montare: rotatia in landscape (lockLandscape) se poate
+    // finaliza asincron, dupa ce ecranul e deja montat, iar un singur
+    // resize() facut la inceput ar putea prinde dimensiunile vechi
+    // (portret) — asta facea ca desenul sa iasa in afara canvas-ului real
+    // sau ca semnatura sa nu se salveze corect. ResizeObserver reactioneaza
+    // de fiecare data cand containerul isi schimba efectiv marimea, oricat
+    // ar dura tranzitia pe telefonul respectiv. Facem resize() DOAR daca
+    // soferul nu a inceput deja sa semneze — altfel am sterge semnatura in curs.
+    if (window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(() => {
+        if (!hasStrokes) resize();
+      });
+      resizeObserver.observe(canvasWrap);
+    } else {
+      requestAnimationFrame(resize);
+      setTimeout(() => {
+        if (!hasStrokes) resize();
+      }, 350);
+    }
 
     function pointFromEvent(e) {
       const rect = canvas.getBoundingClientRect();
@@ -396,6 +409,9 @@ function captureSignatureScreen(title) {
     }
 
     return screen;
+  });
+  return promise.finally(() => {
+    if (resizeObserver) resizeObserver.disconnect();
   });
 }
 
