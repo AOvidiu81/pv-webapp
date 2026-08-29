@@ -81,7 +81,29 @@ export async function annotatePhotoWithMetadata(sourceBlob, lines, depotName, lo
   }
 
   const bannerHeight = headerHeight + 8 + visibleLines.length * lineHeight + 10;
-  const bannerWidth = Math.min(maxBannerWidth, width - 2 * margin);
+
+  // Latimea chenarului "se strange" pe continut, in loc sa ocupe mereu toata
+  // latimea pozei (asa arata bannerul din aplicatia veche APK): masuram cel
+  // mai lat element (titlul + logo, sau cea mai lunga linie de text) si
+  // dimensionam dreptunghiul dupa acel continut, cu putin padding — dar fara
+  // sa depaseasca latimea maxima disponibila (bannerul tot poate creste pana
+  // acolo, pentru comenzi cu text lung).
+  const rightPad = 14;
+  const textLeftPad = 12;
+  const logoW = logoImg ? (logoH / logoImg.height) * logoImg.width : 0;
+  const titleLeftOffset = logoImg ? 10 + logoW + 14 : 14;
+
+  ctx.font = `700 ${titleFontSize}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
+  let neededWidth = titleLeftOffset + ctx.measureText(depotName).width + rightPad;
+
+  ctx.font = `${fontSize}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
+  for (const line of visibleLines) {
+    const lineWidth = textLeftPad + ctx.measureText(line).width + rightPad;
+    if (lineWidth > neededWidth) neededWidth = lineWidth;
+  }
+
+  const minBannerWidth = 140;
+  const bannerWidth = Math.max(minBannerWidth, Math.min(maxBannerWidth, Math.ceil(neededWidth)));
   const startX = margin;
   const startY = Math.max(0, height - bannerHeight - margin);
 
@@ -91,7 +113,6 @@ export async function annotatePhotoWithMetadata(sourceBlob, lines, depotName, lo
 
   let titleX = startX + 14;
   if (logoImg) {
-    const logoW = (logoH / logoImg.height) * logoImg.width;
     ctx.drawImage(logoImg, startX + 10, startY + 8, logoW, logoH);
     titleX = startX + 10 + logoW + 14;
   }
@@ -103,7 +124,7 @@ export async function annotatePhotoWithMetadata(sourceBlob, lines, depotName, lo
   ctx.font = `${fontSize}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
   let textY = startY + headerHeight + 8 + lineHeight / 2;
   for (const line of visibleLines) {
-    ctx.fillText(line, startX + 12, textY);
+    ctx.fillText(line, startX + textLeftPad, textY);
     textY += lineHeight;
   }
 

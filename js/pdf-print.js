@@ -21,7 +21,7 @@ import { displayPvNumber, displayAvizNumber } from './pv-numbering.js';
 import { pushScreen } from './router.js';
 import { el } from './utils.js';
 import { showToast } from './components.js';
-import { generateDocumentPdfBlob, shareOrDownloadPdf } from './pdf-generate.js';
+import { generateDocumentPdfBlob, downloadPdf, shareOrDownloadPdf } from './pdf-generate.js';
 
 const NA = 'N/A';
 
@@ -516,40 +516,70 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     window.addEventListener('resize', applyScale);
 
     const fileNameBase = suggestedFileName || fileToken(title) || 'Proces-Verbal';
-    const shareBtn = el(
-      'button',
-      { class: 'btn btn-block btn-outline' },
-      ['📄  Salveaza / Trimite PDF']
-    );
-    let shareBusy = false;
-    shareBtn.addEventListener('click', async () => {
-      if (shareBusy) return;
-      shareBusy = true;
-      const originalLabel = shareBtn.textContent;
-      shareBtn.textContent = 'Se pregateste PDF-ul...';
-      shareBtn.disabled = true;
+    // Generam PDF-ul o singura data si il refolosim daca soferul apasa mai
+    // multe butoane (Salveaza, apoi Trimite) — evitam randarea de doua ori.
+    let cachedBlobPromise = null;
+    function getPdfBlob() {
+      if (!cachedBlobPromise) cachedBlobPromise = generateDocumentPdfBlob(html);
+      return cachedBlobPromise;
+    }
+
+    const saveBtn = el('button', { class: 'btn btn-outline', style: 'flex:1' }, ['💾  Salveaza PDF']);
+    let saveBusy = false;
+    saveBtn.addEventListener('click', async () => {
+      if (saveBusy) return;
+      saveBusy = true;
+      const originalLabel = saveBtn.textContent;
+      saveBtn.textContent = 'Se pregateste...';
+      saveBtn.disabled = true;
       try {
-        const blob = await generateDocumentPdfBlob(html);
-        // shareOrDownloadPdf() incearca intai meniul nativ de distribuire al
-        // telefonului (Android) cu fisierul deja numit corect ("PVA - CLIENT
-        // - ADRESA - DATA.pdf") — de acolo soferul poate alege direct sa il
-        // deschida cu Adobe Acrobat / alta aplicatie de PDF, sau sa il
-        // trimita pe WhatsApp. Daca distribuirea nu e posibila pe telefonul
-        // respectiv, descarca fisierul cu acelasi nume custom (nu mai
-        // deschidem un tab de browser cu o adresa gen "blob:https://...").
+        const blob = await getPdfBlob();
+        // Descarcare DIRECTA (nu prin meniul de distribuire) — cea mai
+        // sigura metoda sa garantam numele exact al fisierului salvat
+        // ("PVA - CLIENT - ADRESA - DATA.pdf"). Meniul de distribuire al
+        // Android poate, la unele combinatii telefon/aplicatie (ex:
+        // "Salveaza in Fisiere"), sa ignore numele nostru si sa puna unul
+        // generat de sistem — de-asta NU trecem prin el aici.
+        const safeName = downloadPdf(blob, fileNameBase);
+        showToast(`PDF salvat in Descarcari: ${safeName}`);
+      } catch (e) {
+        console.error(e);
+        showToast('Nu am putut genera PDF-ul: ' + e.message, { danger: true });
+      } finally {
+        saveBusy = false;
+        saveBtn.textContent = originalLabel;
+        saveBtn.disabled = false;
+      }
+    });
+
+    const sendBtn = el('button', { class: 'btn btn-outline', style: 'flex:1' }, ['📤  Trimite']);
+    let sendBusy = false;
+    sendBtn.addEventListener('click', async () => {
+      if (sendBusy) return;
+      sendBusy = true;
+      const originalLabel = sendBtn.textContent;
+      sendBtn.textContent = 'Se pregateste...';
+      sendBtn.disabled = true;
+      try {
+        const blob = await getPdfBlob();
+        // Aici mergem pe meniul nativ de distribuire (WhatsApp, Email etc.)
+        // — util pentru trimitere rapida catre alta aplicatie; daca telefonul
+        // nu suporta distribuirea, descarcam fisierul ca rezerva.
         const result = await shareOrDownloadPdf(blob, fileNameBase, { title: fileNameBase });
         if (result === 'downloaded') {
-          showToast('PDF salvat in Descarcari / Fisiere, cu numele documentului.');
+          showToast('Trimiterea nu a fost posibila — PDF-ul a fost descarcat in Descarcari.');
         }
       } catch (e) {
         console.error(e);
         showToast('Nu am putut genera PDF-ul: ' + e.message, { danger: true });
       } finally {
-        shareBusy = false;
-        shareBtn.textContent = originalLabel;
-        shareBtn.disabled = false;
+        sendBusy = false;
+        sendBtn.textContent = originalLabel;
+        sendBtn.disabled = false;
       }
     });
+
+    const saveSendRow = el('div', { style: 'display:flex;gap:10px' }, [saveBtn, sendBtn]);
 
     const bottomBar = el('div', { class: 'preview-bottom-bar' }, [
       el(
@@ -563,7 +593,7 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
         },
         ['🖨  Printeaza / Salveaza ca PDF']
       ),
-      shareBtn,
+      saveSendRow,
     ]);
     screen.appendChild(bottomBar);
 

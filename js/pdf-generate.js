@@ -234,8 +234,31 @@ export async function generateDocumentPdfBlob(html, options) {
   return new Blob([bytes], { type: 'application/pdf' });
 }
 
+/** Descarca direct PDF-ul (fara meniul de distribuire), cu numele exact dat —
+ * cea mai sigura metoda de a garanta numele fisierului salvat: browserul
+ * scrie chiar el fisierul in Descarcari, dupa atributul "download" al unui
+ * link, fara sa treaca prin nicio alta aplicatie care ar putea sa-l redenumeasca. */
+export function downloadPdf(blob, fileName) {
+  const safeName = /\.pdf$/i.test(fileName) ? fileName : `${fileName}.pdf`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = safeName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return safeName;
+}
+
 /** Trimite PDF-ul prin meniul nativ de distribuire al telefonului (WhatsApp
- * apare acolo ca optiune), sau il descarca daca distribuirea nu e posibila. */
+ * apare acolo ca optiune), sau il descarca daca distribuirea nu e posibila.
+ * NOTA: cand se alege din meniul de distribuire o optiune de tip "Salveaza in
+ * Fisiere/Drive", unele combinatii de Android/Chrome pot ignora numele
+ * fisierului nostru si ii pun un nume generat de sistem (ex: un UUID) — o
+ * limitare a sistemului de operare, nu a aplicatiei. Pentru un nume garantat
+ * corect la SALVARE, foloseste downloadPdf() de mai sus; shareOrDownloadPdf()
+ * ramane util pentru TRIMITEREA rapida catre alta aplicatie (WhatsApp etc). */
 export async function shareOrDownloadPdf(blob, fileName, { title, text } = {}) {
   const safeName = /\.pdf$/i.test(fileName) ? fileName : `${fileName}.pdf`;
   let file = null;
@@ -255,13 +278,6 @@ export async function shareOrDownloadPdf(blob, fileName, { title, text } = {}) {
     }
   }
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = safeName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  downloadPdf(blob, safeName);
   return 'downloaded';
 }
