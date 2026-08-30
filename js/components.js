@@ -294,6 +294,20 @@ function captureSignatureScreen(title) {
     // (mult mai lat, gol in cea mai mare parte, dupa blocarea landscape).
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
+    // Simulam un "pix" / stilou real: fiecare trasa continua (de la apasare
+    // pana la ridicarea degetului) e afinata la cele doua capete, ca varful
+    // unui pix real, nu are grosime constanta pe toata lungimea. Cat timp
+    // degetul e pe ecran desenam live la grosimea plina (raspuns instant,
+    // fara lag) — abia cand trasa se termina (pointerup) o redesenam din
+    // memorie cu grosime variabila (subtire -> plina -> subtire). Pastram
+    // TOATE trasele anterioare (nu doar ultima), ca redesenarea sa nu
+    // stearga restul semnaturii deja facute.
+    const PEN_MAX_WIDTH = 3;
+    const PEN_MIN_WIDTH = 1.1;
+    const PEN_TAPER_PX = 10; // lungimea (px CSS) portiunii afinate la fiecare capat
+    let strokes = [];
+    let currentStroke = [];
+
     // Cauza reala a bug-ului "aluneca in jos": .signature-row si
     // .signature-canvas-wrap nu aveau min-height:0 (vezi styles.css) — fara
     // el, un flex item cu continut care primeste o dimensiune EXPLICITA (ca
@@ -330,10 +344,10 @@ function captureSignatureScreen(title) {
       canvas.style.width = w + 'px';
       canvas.style.height = h + 'px';
       ctx.scale(ratio, ratio);
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.strokeStyle = '#1B2F6B';
+      ctx.strokeStyle = '#2454C7';
     }
     // Urmarim CONTINUU dimensiunea reala a zonei de desenat, nu doar o
     // singura data la montare: rotatia in landscape (lockLandscape) se poate
@@ -375,26 +389,65 @@ function captureSignatureScreen(title) {
       if (p.x > maxX) maxX = p.x;
       if (p.y > maxY) maxY = p.y;
     }
+    // Redeseneaza o singura trasa (array de puncte {x,y}) cu grosime
+    // variabila: subtire la cele doua capete, plina in mijloc — ca varful
+    // unui pix real. Grosimea fiecarui segment depinde de distanta parcursa
+    // (nu de numarul de puncte), ca desenul sa arate la fel indiferent cat
+    // de repede/rar a trimis browserul evenimentele pointermove.
+    function drawTaperedStroke(pts) {
+      if (pts.length < 2) return;
+      const dist = [0];
+      for (let i = 1; i < pts.length; i++) {
+        dist.push(dist[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+      }
+      const totalLen = dist[dist.length - 1];
+      const taper = Math.min(PEN_TAPER_PX, totalLen / 2.2);
+      for (let i = 1; i < pts.length; i++) {
+        const midDist = (dist[i - 1] + dist[i]) / 2;
+        const factor = taper > 0 ? Math.min(1, Math.min(midDist, totalLen - midDist) / taper) : 1;
+        ctx.lineWidth = PEN_MIN_WIDTH + (PEN_MAX_WIDTH - PEN_MIN_WIDTH) * factor;
+        ctx.beginPath();
+        ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+        ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.stroke();
+      }
+    }
+    // Reface tot desenul (toate trasele) din memorie, cu afinare la capete.
+    // Apelata doar la finalul fiecarei trase (pointerup) — cat timp degetul
+    // e inca pe ecran desenam live, la grosime plina, ca sa nu introducem lag.
+    function redrawTapered() {
+      ctx.clearRect(0, 0, canvasWrap.clientWidth, canvasWrap.clientHeight);
+      strokes.forEach(drawTaperedStroke);
+    }
     function start(e) {
       e.preventDefault();
       drawing = true;
       last = pointFromEvent(e);
       extendBounds(last);
+      currentStroke = [last];
     }
     function move(e) {
       if (!drawing) return;
       e.preventDefault();
       const p = pointFromEvent(e);
+      ctx.lineWidth = PEN_MAX_WIDTH;
       ctx.beginPath();
       ctx.moveTo(last.x, last.y);
       ctx.lineTo(p.x, p.y);
       ctx.stroke();
       last = p;
+      currentStroke.push(p);
       hasStrokes = true;
       extendBounds(p);
     }
     function end(e) {
+      if (!drawing) return;
       drawing = false;
+      if (currentStroke.length > 1) {
+        strokes.push(currentStroke);
+        redrawTapered();
+      }
+      currentStroke = [];
     }
     canvas.addEventListener('pointerdown', start);
     canvas.addEventListener('pointermove', move);
@@ -405,6 +458,8 @@ function captureSignatureScreen(title) {
       // nu dreptunghiul rotit din getBoundingClientRect().
       ctx.clearRect(0, 0, canvasWrap.clientWidth, canvasWrap.clientHeight);
       hasStrokes = false;
+      strokes = [];
+      currentStroke = [];
       minX = Infinity;
       minY = Infinity;
       maxX = -Infinity;
