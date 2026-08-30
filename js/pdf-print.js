@@ -165,12 +165,14 @@ function conditionsBox(processTypeUpper) {
 function productsTableHtml(model) {
   const rows = productRows(model);
   return `
-    <table class="doc-table doc-products-table">
-      <thead><tr><th class="col-buc">BUC.</th><th class="col-model">MODEL PRODUS</th><th class="col-tip">TIP PRODUS</th><th class="col-serii">SERII</th></tr></thead>
-      <tbody>
-        ${rows.map((r) => `<tr><td class="col-buc center">${r.buc}</td><td class="col-model">${esc(r.model)}</td><td class="col-tip">${esc(r.type)}</td><td class="col-serii">${formatSeriesCell(r.seriesList)}</td></tr>`).join('')}
-      </tbody>
-    </table>`;
+    <div class="doc-table-frame doc-table-frame-green">
+      <table class="doc-table doc-products-table">
+        <thead><tr><th class="col-buc">BUC.</th><th class="col-model">MODEL PRODUS</th><th class="col-tip">TIP PRODUS</th><th class="col-serii">SERII</th></tr></thead>
+        <tbody>
+          ${rows.map((r) => `<tr><td class="col-buc center">${r.buc}</td><td class="col-model">${esc(r.model)}</td><td class="col-tip">${esc(r.type)}</td><td class="col-serii">${formatSeriesCell(r.seriesList)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficiarySignatureUrl, driverSignatureUrl, stampAvailable, pageIndex, pageTotal }) {

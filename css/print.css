@@ -11,6 +11,9 @@
   --doc-border: #b7c0cf;
   --doc-border-strong: #16233c;
   --doc-muted: #5b6b84;
+  --doc-green: #1f6b46;
+  --doc-green-border: #a9dcc0;
+  --doc-green-light: #eaf8f0;
 }
 
 .doc-page {
@@ -112,9 +115,24 @@
 
 .doc-location-bar { margin-top: 3mm; font-size: 9.6pt; background: var(--doc-blue-light); border-color: #b9d0ec; }
 
+.doc-table-frame {
+  margin-top: 3mm;
+  border: 0.7pt solid var(--doc-border-strong);
+  border-radius: 1.4mm;
+  overflow: hidden;
+}
+.doc-table-frame .doc-table { margin-top: 0; }
 .doc-table { width: 100%; border-collapse: collapse; margin-top: 3mm; font-size: 8.6pt; }
 .doc-table th, .doc-table td { border: 0.7pt solid var(--doc-border-strong); padding: 1.4mm 2mm; }
 .doc-table thead th { font-family: Arial, sans-serif; font-weight: 700; background: #eef2f8; text-align: left; }
+
+/* Varianta verde "premium" pentru chenarul tabelului de produse — acelasi
+   principiu ca .doc-location-bar / .doc-confirmation-banner (bordura +
+   fundal deschis, pastelate), aplicat aici liniilor tabelului. */
+.doc-table-frame-green { border-color: var(--doc-green-border); }
+.doc-table-frame-green .doc-table th,
+.doc-table-frame-green .doc-table td { border-color: var(--doc-green-border); }
+.doc-table-frame-green .doc-table thead th { background: var(--doc-green-light); color: var(--doc-green); }
 .doc-table td.center, .doc-table th.center { text-align: center; }
 .doc-products-table .col-buc { width: 10%; }
 .doc-products-table .col-model { width: 22%; }
