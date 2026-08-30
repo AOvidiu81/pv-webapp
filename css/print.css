@@ -157,9 +157,19 @@
 .doc-aviz-parties { align-items: stretch; }
 .doc-furnizor, .doc-beneficiar-box { font-size: 8.4pt; }
 .doc-divider { height: 0.5pt; background: #c3ccd9; margin: 1mm 0 1.6mm; }
-.doc-beneficiar-grid { display: flex; gap: 2mm; }
-.doc-beneficiar-grid > div:first-child { flex: 1; }
-.doc-beneficiar-stamp-slot { width: 26mm; height: 13mm; border: 0.6pt solid #97a4b8; border-radius: 1mm; }
+.doc-beneficiar-grid { display: flex; flex-direction: column; gap: 1.5mm; }
+.doc-beneficiar-stamp-slot {
+  width: 30mm;
+  height: 13mm;
+  border: 0.6pt solid #97a4b8;
+  border-radius: 1mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fbfcfe;
+  flex-shrink: 0;
+}
+.doc-beneficiar-stamp-slot img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
 .doc-aviz-meta-row {
   display: flex;

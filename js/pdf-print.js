@@ -286,7 +286,7 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
   </section>`;
 }
 
-function pageTwoAviz({ model, depotEmail, depotPhone, driverSignatureUrl, stampAvailable, pageIndex, pageTotal }) {
+function pageTwoAviz({ model, depotEmail, depotPhone, beneficiarySignatureUrl, driverSignatureUrl, stampAvailable, pageIndex, pageTotal }) {
   const processTypeUpper = (model.processType || '').trim().toUpperCase();
   const avizNumber = displayAvizNumber(model.avizNumber);
   const clientName = (model.clientName || '').trim().toUpperCase() || 'BENEFICIAR';
@@ -323,7 +323,9 @@ function pageTwoAviz({ model, depotEmail, depotPhone, driverSignatureUrl, stampA
             <div>Serie CI - Nr: ${esc(model.beneficiaryCiSeries || 'N/A')} - ${esc(model.beneficiaryCiNumber || 'N/A')}</div>
             <div>Telefon: ${esc(model.beneficiaryPhone || 'N/A')}</div>
           </div>
-          <div class="doc-beneficiar-stamp-slot"></div>
+          <div class="doc-beneficiar-stamp-slot">
+            ${beneficiarySignatureUrl ? `<img src="${beneficiarySignatureUrl}" alt="semnatura" />` : ''}
+          </div>
         </div>
       </div>
     </div>
