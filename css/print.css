@@ -37,7 +37,7 @@
 
 .doc-header { margin-bottom: 5mm; }
 .doc-header-img { width: 100%; max-height: 20mm; object-fit: contain; display: block; }
-.doc-header-rule { height: 1.1pt; background: var(--doc-blue); margin-top: 2mm; }
+.doc-header-rule { height: 0.9pt; background: var(--doc-blue); margin-top: 2mm; }
 
 .doc-preview-badge {
   position: absolute;
