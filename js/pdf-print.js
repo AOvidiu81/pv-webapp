@@ -15,6 +15,7 @@ import {
   displayOrNa,
   withoutDiacritics,
   fileToken,
+  shrinkTextToFitOneLine,
 } from './utils.js';
 import { CONDITIONS_BY_TYPE, COMPANY_INFO, confirmationBanner } from './catalog-defaults.js';
 import { displayPvNumber, displayAvizNumber } from './pv-numbering.js';
@@ -451,6 +452,15 @@ export function buildDocumentHtml(params) {
   return html;
 }
 
+// Textul rosu "va rog sa retrimiteti..." trebuie sa incapa mereu pe UN
+// singur rand (vezi shrinkTextToFitOneLine din utils.js) — indiferent de
+// lungimea lui (tip proces + adresa de email pot varia). Functie comuna,
+// apelata din toate cele 3 locuri unde documentul e randat efectiv (preview
+// in-app, tiparire nativa, export PDF din pdf-generate.js).
+function fitReturnMessages(root) {
+  root.querySelectorAll('.doc-return-message').forEach((el) => shrinkTextToFitOneLine(el));
+}
+
 /**
  * Deschide fereastra de tiparire a browserului cu documentul dat, afisand
  * dialogul nativ de "Salveaza ca PDF" (Chrome pe Android).
@@ -460,9 +470,18 @@ export function printDocument(html, suggestedTitle) {
   printRoot.innerHTML = html;
   const previousTitle = document.title;
   if (suggestedTitle) document.title = suggestedTitle;
+  // #print-root e "display:none" in afara @media print (vezi print.css) —
+  // pana nu incepe efectiv tiparirea, elementele din el nu au layout deloc
+  // (scrollWidth/clientWidth ar fi 0), deci nu putem calcula micsorarea
+  // fontului mai devreme. "beforeprint" e evenimentul care se declanseaza
+  // chiar in momentul in care browserul comuta pe stilurile de print,
+  // exact cand avem nevoie sa masuram/ajustam.
+  const onBeforePrint = () => fitReturnMessages(printRoot);
+  window.addEventListener('beforeprint', onBeforePrint);
   const restore = () => {
     document.title = previousTitle;
     window.removeEventListener('afterprint', restore);
+    window.removeEventListener('beforeprint', onBeforePrint);
   };
   window.addEventListener('afterprint', restore);
   setTimeout(() => {
@@ -492,6 +511,10 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     const measureHost = el('div', { style: 'position:absolute;visibility:hidden;pointer-events:none;left:-9999px;top:0' });
     measureHost.innerHTML = html;
     document.body.appendChild(measureHost);
+    // Inainte sa masuram dimensiunile naturale ale paginii (mai jos) —
+    // altfel, daca textul rosu s-ar micsora DUPA masuratoare, inaltimea
+    // paginii calculata aici ar ramane cea veche (cu 2 randuri), gresita.
+    fitReturnMessages(measureHost);
     const sourcePages = Array.from(measureHost.querySelectorAll('.doc-page'));
     const frames = sourcePages.map((page) => {
       const naturalWidth = page.offsetWidth;

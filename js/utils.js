@@ -154,6 +154,32 @@ export function debounce(fn, delay = 250) {
   };
 }
 
+/**
+ * Micsoreaza font-size-ul unui element (deja "white-space: nowrap" din CSS)
+ * pas cu pas, pana cand incape pe UN singur rand in latimea disponibila —
+ * folosit pentru textul rosu "va rog sa retrimiteti..." din documentul PV,
+ * a carui lungime variaza (tip proces + adresa de email pot fi mai lungi
+ * sau mai scurte). Element-ul trebuie sa fie deja montat in DOM (are
+ * clientWidth/scrollWidth valide) — safe de apelat de mai multe ori (ex.
+ * daca fontul de baza s-a schimbat intre timp), reporneste mereu de la
+ * dimensiunea CSS originala.
+ */
+export function shrinkTextToFitOneLine(el, { minFontSizePx = 9, stepPx = 0.5 } = {}) {
+  if (!el) return;
+  const computed = window.getComputedStyle(el);
+  const originalFontSize = el.style.fontSize || computed.fontSize;
+  let fontSizePx = parseFloat(computed.fontSize);
+  if (!fontSizePx || !isFinite(fontSizePx)) return;
+  el.style.fontSize = fontSizePx + 'px';
+  let guard = 0;
+  while (el.scrollWidth > el.clientWidth && fontSizePx > minFontSizePx && guard < 200) {
+    fontSizePx -= stepPx;
+    el.style.fontSize = fontSizePx + 'px';
+    guard += 1;
+  }
+  if (guard === 0) el.style.fontSize = originalFontSize; // nu a fost nevoie sa micsoram, pastram CSS-ul original
+}
+
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {

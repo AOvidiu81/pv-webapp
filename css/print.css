@@ -188,6 +188,13 @@
   color: var(--doc-red);
   font-size: 9.6pt;
   margin: 2mm 0 1.5mm;
+  /* Mereu pe UN singur rand, indiferent de lungimea textului (tip proces +
+     adresa de email pot varia) — vezi fitReturnMessages() din pdf-print.js,
+     care micsoreaza font-size-ul din JS pana incape, inainte de tiparire/
+     export. white-space:nowrap + overflow:hidden raman aici doar ca plasa
+     de siguranta daca JS nu a apucat sa ruleze. */
+  white-space: nowrap;
+  overflow: hidden;
 }
 .doc-return-message-p1 { margin-top: 3mm; }
 

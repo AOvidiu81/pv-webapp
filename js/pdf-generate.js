@@ -15,7 +15,7 @@
 // Acest PDF poate fi apoi trimis direct din aplicatie (Web Share API) catre
 // WhatsApp sau orice alta aplicatie de pe telefon — vezi shareOrDownloadPdf().
 
-import { blobToDataUrl } from './utils.js';
+import { blobToDataUrl, shrinkTextToFitOneLine } from './utils.js';
 
 const A4_PT = { w: 595.28, h: 841.89 }; // 210mm x 297mm, in puncte (1pt = 1/72in)
 
@@ -127,6 +127,12 @@ export async function renderDocPagesToJpegs(html, { scale = 1.6, quality = 0.85 
       page.style.minHeight = '297mm';
       page.style.overflow = 'hidden';
     });
+    // Textul rosu "va rog sa retrimiteti..." trebuie sa incapa mereu pe UN
+    // singur rand (aceeasi logica ca in pdf-print.js openPrintPreview/
+    // printDocument) — facut aici separat (nu importat din pdf-print.js) ca
+    // sa evitam un import circular (pdf-print.js importa deja din acest
+    // fisier).
+    host.querySelectorAll('.doc-return-message').forEach((elx) => shrinkTextToFitOneLine(elx));
     const cssText = await getPrintCssText();
     const results = [];
     for (const page of pages) {
