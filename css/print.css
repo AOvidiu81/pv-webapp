@@ -49,7 +49,7 @@
   font-weight: 700;
   font-size: 8pt;
   padding: 1mm 2.5mm;
-  border-radius: 2mm;
+  border-radius: 1mm;
   letter-spacing: 0.5pt;
 }
 
@@ -89,7 +89,7 @@
 
 .doc-box {
   border: 0.7pt solid var(--doc-border);
-  border-radius: 1.4mm;
+  border-radius: 1mm;
   padding: 2.4mm 3.2mm;
   font-size: 9pt;
 }
@@ -118,7 +118,7 @@
 .doc-table-frame {
   margin-top: 3mm;
   border: 0.7pt solid var(--doc-border-strong);
-  border-radius: 1.4mm;
+  border-radius: 1mm;
   overflow: hidden;
 }
 .doc-table-frame .doc-table { margin-top: 0; }
@@ -252,7 +252,7 @@
 .doc-annex-photo-frame {
   flex: 1;
   border: 0.7pt solid var(--doc-border);
-  border-radius: 2mm;
+  border-radius: 1mm;
   display: flex;
   align-items: center;
   justify-content: center;
