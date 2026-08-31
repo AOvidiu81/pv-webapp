@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Admin — Euro Ecologic PV</title>
+<meta name="theme-color" content="#0b3b66" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="../icons/admin-icon-192.png" />
+<link rel="apple-touch-icon" href="../icons/admin-icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="EE Admin" />
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <img class="login-logo" src="../assets/logo/euro_ecologic_logo.png" alt="Euro Ecologic" />
+    <h1 class="login-title">Panou de administrare</h1>
+    <p class="login-subtitle">Procese Verbale — Euro Ecologic</p>
+    <form id="login-form">
+      <div class="field">
+        <label>Utilizator</label>
+        <input id="login-username" type="text" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label>Parola</label>
+        <input id="login-password" type="password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" id="login-btn" class="btn btn-primary btn-block">Intra in cont</button>
+      <div class="error-text" id="login-error"></div>
+    </form>
+  </div>
+</div>
+
+<div id="dashboard" class="hidden">
+  <div class="topbar">
+    <img src="../assets/logo/euro_ecologic_mark.png" alt="" />
+    <div class="topbar-title">Admin Procese Verbale</div>
+    <div class="topbar-user" id="topbar-user"></div>
+    <button class="btn btn-sm btn-outline" id="change-password-btn" style="color:#fff;border-color:rgba(255,255,255,0.5)">Schimba parola</button>
+    <button class="btn btn-sm btn-outline" id="logout-btn" style="color:#fff;border-color:rgba(255,255,255,0.5)">Iesire</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="drivers">Soferi</button>
+    <button class="tab-btn" data-tab="vehicles">Masini</button>
+    <button class="tab-btn" data-tab="products">Produse</button>
+  </div>
+
+  <div class="content">
+    <div class="panel active" id="panel-drivers">
+      <div class="panel-head">
+        <h2>Soferi</h2>
+        <button class="btn btn-primary" id="add-driver-btn">+ Adauga sofer</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Utilizator</th><th>Nume</th><th>Masina</th><th>Acces</th><th>Semnatura</th><th>Actiuni</th></tr>
+          </thead>
+          <tbody id="drivers-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-vehicles">
+      <div class="panel-head">
+        <h2>Masini</h2>
+        <button class="btn btn-primary" id="add-vehicle-btn">+ Adauga masina</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Marca</th><th>Numar</th><th>Stare</th><th>Actiuni</th></tr>
+          </thead>
+          <tbody id="vehicles-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-products">
+      <div class="panel-head">
+        <h2>Produse</h2>
+        <button class="btn btn-primary" id="add-product-btn">+ Adauga produs</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Model</th><th>Tip</th><th>Stare</th><th>Actiuni</th></tr>
+          </thead>
+          <tbody id="products-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-host"></div>
+<div id="toast-host" class="toast-host"></div>
+
+<script type="module" src="admin.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
