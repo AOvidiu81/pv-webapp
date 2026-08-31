@@ -5,7 +5,7 @@
 // functioneaza neschimbat (si offline) — sesiunea ramane pe telefon, deci
 // acest ecran nu mai reapare decat dupa o deconectare explicita.
 
-import { el, blobToDataUrl } from './utils.js';
+import { el, blobToDataUrl, APP_VERSION } from './utils.js';
 import { replaceRoot } from './router.js';
 import { primaryButton, showToast, captureSignature } from './components.js';
 import { getCurrentProfile, listDriversForLogin, signInAsDriver, signOut, saveOwnSignature, syncMasterData } from './auth.js';
@@ -35,6 +35,7 @@ function runLoginScreen() {
       replaceRoot(() => {
         const screen = el('div', { class: 'screen' });
         const logo = el('img', { class: 'brand-logo', src: 'assets/logo/euro_ecologic_logo.png', alt: 'Euro Ecologic' });
+        const versionTag = el('div', { class: 'app-version-tag' }, [`Versiune aplicatie: ${APP_VERSION}`]);
 
         const statusBox = el('div', { style: 'text-align:center;color:var(--ink-soft);font-size:13.5px;margin:4px 0 2px' }, ['Se incarca lista de soferi...']);
         const listBox = el('div', { style: 'display:flex;flex-direction:column;gap:10px;margin-top:4px' }, []);
@@ -50,7 +51,7 @@ function runLoginScreen() {
           errorBox,
         ]);
 
-        const scroll = el('div', { class: 'screen-scroll', style: 'display:flex;flex-direction:column;justify-content:center;min-height:100%' }, [logo, card]);
+        const scroll = el('div', { class: 'screen-scroll', style: 'display:flex;flex-direction:column;justify-content:center;min-height:100%' }, [logo, versionTag, card]);
         screen.appendChild(scroll);
 
         (async () => {

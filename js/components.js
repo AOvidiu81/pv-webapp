@@ -234,12 +234,11 @@ export function captureSignature({ title = 'Semnatura' } = {}) {
 }
 
 function captureSignatureScreen(title) {
-  // Referinte ridicate in afara builder-ului lui pushScreen(), ca sa putem
+  // Referinta ridicata in afara builder-ului lui pushScreen(), ca sa putem
   // opri urmarirea dimensiunilor cand ecranul se inchide, indiferent cum
   // iese soferul din el (buton, salvare sau Back hardware) — vezi
   // promise.finally() mai jos.
   let resizeObserver = null;
-  let rowResizeObserver = null;
   const promise = pushScreen(({ pop }) => {
     const canvasWrap = el('div', { class: 'signature-canvas-wrap' });
     const canvas = el('canvas', { class: 'signature-canvas' });
@@ -253,48 +252,13 @@ function captureSignatureScreen(title) {
     ]);
     const clearBtn = el('button', { class: 'sig-side-btn sig-clear', onclick: () => { hapticTap(); clear(); } }, ['⟲']);
     const okBtn = el('button', { class: 'sig-side-btn sig-ok', onclick: () => { hapticTap(); save(); } }, ['✓']);
-    // Ordinea in DOM aici e [ok, canvas, clear] (nu [clear, canvas, ok]) —
-    // dupa rotatia CSS a chenarului de desenat, primul copil ajunge pe
-    // marginea DREAPTA vazuta de sofer (verificat empiric cu Playwright),
-    // asa ca punem verde primul ca sa iasa dreapta si rosu ultimul ca sa
-    // iasa stanga — la fel ca in schema originala (rosu stanga, verde dreapta).
-    const row = el('div', { class: 'signature-row' }, [okBtn, canvasWrap, clearBtn]);
-    // rowWrap ocupa spatiul NORMAL (nerotit) din layout-ul coloanei
-    // (topbar/rowWrap/hint) — cat spatiu ramane dupa bara de sus si textul
-    // de jos. row (continutul chenarului) e absolut pozitionat in interior
-    // si rotit cu 90°, cu latime/inaltime setate mai jos din JS, in pixeli,
-    // INTERSCHIMBATE fata de dimensiunile masurate ale lui rowWrap — asta e
-    // trucul care face chenarul sa umple exact spatiul disponibil, oricat
-    // de mare/mic ar fi el pe telefonul respectiv.
-    const rowWrap = el('div', { class: 'signature-row-wrap' }, [row]);
-    // Chenarul de desenat (row) e rotit CSS cu 90° ca sa fie "lat" — asta
-    // functioneaza corect DOAR daca soferul intoarce telefonul FIZIC pe
-    // lateral inainte sa semneze (vezi comentariul de mai sus/din styles.css).
-    // Fara niciun indiciu pe ecran, soferul semna cu telefonul drept, iar
-    // semnatura iese rotita/verticala in PV — de-aia avem acest banner,
-    // afisat INAINTE de chenar (nerotit, ca sa se citeasca normal cat timp
-    // telefonul e inca in picioare).
-    const rotateHint = el('div', { class: 'signature-rotate-hint' }, [
-      el('span', { class: 'signature-rotate-hint-icon' }, ['📱↻']),
-      el('span', {}, ['Intoarce telefonul pe lateral, apoi semneaza in chenar']),
-    ]);
+    // Chenarul de desenat NU mai e rotit — telefonul ramane drept, deci
+    // ordinea naturala in DOM e si ordinea vazuta de sofer: rosu (sterge) in
+    // stanga, verde (validare) in dreapta.
+    const row = el('div', { class: 'signature-row' }, [clearBtn, canvasWrap, okBtn]);
     screen.appendChild(topBar);
-    screen.appendChild(rotateHint);
-    screen.appendChild(rowWrap);
+    screen.appendChild(row);
     screen.appendChild(el('div', { class: 'signature-hint' }, ['Semneaza in chenar folosind degetul sau stylus-ul.']));
-
-    function resizeRow() {
-      const wrapRect = rowWrap.getBoundingClientRect();
-      if (!wrapRect.width || !wrapRect.height) return;
-      row.style.width = wrapRect.height + 'px';
-      row.style.height = wrapRect.width + 'px';
-    }
-    if (window.ResizeObserver) {
-      rowResizeObserver = new ResizeObserver(resizeRow);
-      rowResizeObserver.observe(rowWrap);
-    } else {
-      requestAnimationFrame(resizeRow);
-    }
 
     const ctx = canvas.getContext('2d');
     let drawing = false;
@@ -334,16 +298,8 @@ function captureSignatureScreen(title) {
     // daca dimensiunea masurata nu s-a schimbat cu adevarat.
     let lastW = 0, lastH = 0;
     function resize() {
-      // IMPORTANT: folosim clientWidth/clientHeight (dimensiunea LOCALA de
-      // layout a lui canvasWrap, neafectata de transform-uri), NU
-      // getBoundingClientRect() (care da dreptunghiul FINAL, dupa rotatia
-      // CSS aplicata de .signature-row). canvas.style.width/height sunt
-      // proprietati LOCALE — canvas mosteneste ACEEASI rotatie de la
-      // stramosul comun (row), asa ca daca i-am da dimensiunea deja rotita
-      // a lui canvasWrap, rotatia s-ar aplica a DOUA oara si canvas-ul ar
-      // iesi cu proportii gresite, in afara ecranului (bug depistat empiric
-      // cu Playwright: canvas aparea deplasat, cu latime/inaltime inversate
-      // fata de canvasWrap).
+      // clientWidth/clientHeight = dimensiunea reala de layout a lui
+      // canvasWrap, neafectata de padding-ul altor elemente din row.
       const w = canvasWrap.clientWidth;
       const h = canvasWrap.clientHeight;
       if (!w || !h) return; // containerul inca nu are dimensiuni (ecran in tranzitie)
@@ -362,14 +318,14 @@ function captureSignatureScreen(title) {
       ctx.strokeStyle = '#2454C7';
     }
     // Urmarim CONTINUU dimensiunea reala a zonei de desenat, nu doar o
-    // singura data la montare: rotatia in landscape (lockLandscape) se poate
-    // finaliza asincron, dupa ce ecranul e deja montat, iar un singur
-    // resize() facut la inceput ar putea prinde dimensiunile vechi
-    // (portret) — asta facea ca desenul sa iasa in afara canvas-ului real
-    // sau ca semnatura sa nu se salveze corect. ResizeObserver reactioneaza
-    // de fiecare data cand containerul isi schimba efectiv marimea, oricat
-    // ar dura tranzitia pe telefonul respectiv. Facem resize() DOAR daca
-    // soferul nu a inceput deja sa semneze — altfel am sterge semnatura in curs.
+    // singura data la montare: layout-ul se poate stabiliza asincron (ex.
+    // bara de adrese a browserului care se restrange la scroll), iar un
+    // singur resize() facut la inceput ar putea prinde dimensiuni vechi —
+    // asta facea ca desenul sa iasa in afara canvas-ului real sau ca
+    // semnatura sa nu se salveze corect. ResizeObserver reactioneaza de
+    // fiecare data cand containerul isi schimba efectiv marimea. Facem
+    // resize() DOAR daca soferul nu a inceput deja sa semneze — altfel am
+    // sterge semnatura in curs.
     if (window.ResizeObserver) {
       resizeObserver = new ResizeObserver(() => {
         if (!hasStrokes) resize();
@@ -382,18 +338,13 @@ function captureSignatureScreen(title) {
       }, 350);
     }
 
-    // canvas.getBoundingClientRect() ne da deja dreptunghiul CORECT (rotit)
-    // in coordonate de viewport — dar clientX/clientY ale evenimentelor de
-    // touch/mouse raman mereu in coordonate de viewport NEROTITE. Pentru
-    // .signature-screen, rotit cu rotate(90deg) (in sensul acelor de
-    // ceasornic), transformarea inversa (viewport -> local canvas) este:
-    // x local = clientY - rect.top, y local = rect.right - clientX
-    // (verificat empiric cu Playwright: un gest desenat de-a lungul zonei
-    // late de semnat produce o cerneala lata, nu ingusta/verticala).
+    // Chenarul nu mai e rotit CSS, asa ca maparea e cea directa: coordonata
+    // locala din canvas = coordonata de viewport a evenimentului minus
+    // coltul stanga-sus al lui canvas.getBoundingClientRect().
     function pointFromEvent(e) {
       const rect = canvas.getBoundingClientRect();
       const point = e.touches ? e.touches[0] : e;
-      return { x: point.clientY - rect.top, y: rect.right - point.clientX };
+      return { x: point.clientX - rect.left, y: point.clientY - rect.top };
     }
     function extendBounds(p) {
       if (p.x < minX) minX = p.x;
@@ -519,7 +470,6 @@ function captureSignatureScreen(title) {
   });
   return promise.finally(() => {
     if (resizeObserver) resizeObserver.disconnect();
-    if (rowResizeObserver) rowResizeObserver.disconnect();
   });
 }
 

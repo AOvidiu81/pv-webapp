@@ -215,58 +215,24 @@ select.field-input { appearance: none; background-image: linear-gradient(45deg, 
 
 /* Signature screen */
 .signature-screen { display: flex; flex-direction: column; height: 100%; background: var(--surface); }
-/* Bara de sus (titlu, buton Inapoi) si textul de ajutor de jos raman
-   NEROTITE — se citesc normal, fara sa fie nevoie sa intorci telefonul.
-   SINGURA zona rotita e chenarul de desenat (.signature-row), care trebuie
-   sa fie mereu "landscape" (lat), indiferent daca API-ul Screen Orientation
-   reuseste sa roteasca fizic telefonul (pe multe telefoane/browsere nu
-   functioneaza deloc in afara modului fullscreen — vezi istoricul din
-   components.js). In loc sa depindem de asta, rotim noi insine cu CSS doar
-   acest chenar, 90 de grade, ca sa umple exact spatiul rezervat de
-   .signature-row-wrap (width/height ii sunt setate din JS, in pixeli,
-   INTERSCHIMBATE fata de wrap — vezi ResizeObserver-ul din
-   captureSignatureScreen()). Soferul roteste telefonul fizic ca sa
-   citeasca acest chenar normal — dar acum functioneaza garantat, pe orice
-   telefon/browser, indiferent daca e instalat ca aplicatie sau deschis
-   intr-un tab obisnuit. */
-/* Banner afisat INAINTE de chenarul rotit (vezi mai jos), cat timp telefonul
-   e inca in pozitie normala (in picioare) — singurul moment in care un
-   indiciu despre rotirea telefonului chiar se citeste normal. Fara el,
-   soferul semneaza cu telefonul drept, iar semnatura iese rotita/verticala
-   in PV (chenarul de desenat presupune ca telefonul a fost intors). */
-.signature-rotate-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: var(--brand-accent-light);
-  color: var(--brand-primary-dark);
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-  padding: 10px 16px;
-  border-bottom: 1px solid #bfe6e6;
-}
-.signature-rotate-hint-icon { font-size: 16px; }
-.signature-row-wrap { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+/* Chenarul de desenat NU mai e rotit cu CSS (am incercat asta si necesita ca
+   soferul sa intoarca telefonul fizic pe lateral — evidente reale au aratat
+   ca atunci cand nu o face, semnatura iese verticala/stramba in PV). Acum
+   chenarul ramane in pozitia lui naturala (nerotita), telefonul sta drept in
+   mana ca la restul aplicatiei — soferul scrie normal in chenar, cu degetul
+   sau stylus-ul. La salvare (functia save()), semnatura e decupata strans pe
+   conturul cernelii desenate efectiv (minX/minY/maxX/maxY), nu pe tot
+   chenarul — iar o semnatura scrisa de mana e in mod natural mai lata decat
+   inalta, asa ca rezultatul decupat iese "landscape" de la sine, fara sa
+   depinda de orientarea fizica a telefonului. */
 .signature-row {
-  position: absolute;
-  top: 0;
-  left: 0;
+  flex: 1;
   display: flex;
-  /* O rotatie CSS pastreaza unghiurile relative dintre axe: daca am lasa
-     flex-direction:row (clear/canvas/ok orizontal, ca-n forma nerotita) si
-     am roti tot chenarul cu 90°, rezultatul ar iesi din nou ingust pe
-     verticala (exact ce vrem sa eliminam). De-aia folosim column AICI — o
-     rasucire "inversa" facuta dinainte, ca dupa rotatia CSS rezultatul
-     vazut de sofer sa arate lat: rosu/verde pe laterale, canvas lat la
-     mijloc. Verificat empiric cu Playwright (capturi de ecran + gesturi). */
-  flex-direction: column;
+  flex-direction: row;
   align-items: stretch;
   gap: 12px;
   padding: 10px 14px;
-  transform-origin: top left;
-  transform: rotate(90deg) translateY(-100%);
+  min-height: 0;
 }
 .signature-canvas-wrap { flex: 1; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); position: relative; overflow: hidden; touch-action: none; min-height: 0; min-width: 0; }
 .signature-canvas { width: 100%; height: 100%; touch-action: none; display: block; }
@@ -369,7 +335,8 @@ select.field-input { appearance: none; background-image: linear-gradient(45deg, 
 .setup-progress-dot { flex: 1; height: 4px; border-radius: 2px; background: var(--border); }
 .setup-progress-dot.active { background: var(--brand-primary); }
 .setup-progress-dot.done { background: var(--success); }
-.brand-logo { display: block; margin: 6px auto 18px; height: 52px; object-fit: contain; }
+.brand-logo { display: block; margin: 6px auto 4px; height: 52px; object-fit: contain; }
+.app-version-tag { display: block; text-align: center; margin: 0 auto 18px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.2px; color: var(--ink-soft); opacity: 0.75; }
 
 @media (min-width: 640px) {
   .screen-scroll, .bottom-actions, .preview-bottom-bar { padding-left: max(16px, calc((100% - 560px) / 2)); padding-right: max(16px, calc((100% - 560px) / 2)); }

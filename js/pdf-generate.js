@@ -307,24 +307,24 @@ export async function shareOrDownloadPdf(blob, fileName, { title, text } = {}) {
   if (canShareFiles) {
     try {
       await navigator.share({ files: [file], title: title || safeName, text: text || '' });
-      return 'shared';
+      return { status: 'shared' };
     } catch (e) {
-      if (e && e.name === 'AbortError') return 'cancelled';
+      if (e && e.name === 'AbortError') return { status: 'cancelled' };
       // continuam cu descarcarea ca rezerva daca share esueaza dintr-un alt
-      // motiv — dar lasam un semnal in consola (vizibil prin depanare USB /
-      // chrome://inspect), altfel cauza reala pentru care cade pe descarcare
-      // in loc sa deschida meniul de distribuire (WhatsApp etc.) ramane
-      // invizibila.
-      console.warn('[shareOrDownloadPdf] navigator.share() a esuat, cad pe descarcare:', e && e.name, e && e.message);
+      // motiv — dar pastram motivul exact (nume + mesaj eroare), ca sa poata
+      // fi afisat direct in aplicatie (vezi pdf-print.js) — fara asta, cauza
+      // reala pentru care cade pe descarcare in loc sa deschida meniul de
+      // distribuire (WhatsApp etc.) ramane invizibila fara acces la
+      // chrome://inspect / depanare USB.
+      const reason = `share() a esuat: ${(e && e.name) || 'eroare'} ${(e && e.message) || ''}`.trim();
+      console.warn('[shareOrDownloadPdf]', reason);
+      downloadPdf(blob, safeName);
+      return { status: 'downloaded', reason };
     }
-  } else {
-    console.warn('[shareOrDownloadPdf] distribuirea nu e disponibila pentru acest fisier (canShare=false), cad pe descarcare.', {
-      hasNavigatorShare: !!navigator.share,
-      hasCanShare: !!navigator.canShare,
-      hasFile: !!file,
-    });
   }
 
+  const reason = `distribuire indisponibila (canShare=false) — share:${!!navigator.share} canShare:${!!navigator.canShare} file:${!!file}`;
+  console.warn('[shareOrDownloadPdf]', reason);
   downloadPdf(blob, safeName);
-  return 'downloaded';
+  return { status: 'downloaded', reason };
 }

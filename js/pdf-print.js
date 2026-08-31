@@ -622,8 +622,12 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
         // — util pentru trimitere rapida catre alta aplicatie; daca telefonul
         // nu suporta distribuirea, descarcam fisierul ca rezerva.
         const result = await shareOrDownloadPdf(blob, fileNameBase, { title: fileNameBase });
-        if (result === 'downloaded') {
-          showToast('Trimiterea nu a fost posibila — PDF-ul a fost descarcat in Descarcari.');
+        if (result.status === 'downloaded') {
+          // Includem motivul exact (vezi shareOrDownloadPdf) direct in toast —
+          // fara acces la depanare USB / chrome://inspect pe telefonul
+          // soferului, acesta e singurul mod sa aflam de ce nu s-a deschis
+          // meniul de distribuire (WhatsApp etc.) in loc sa descarce fisierul.
+          showToast(`Trimiterea nu a fost posibila, PDF-ul a fost descarcat. (${result.reason || 'motiv necunoscut'})`, { danger: true });
         }
       } catch (e) {
         console.error(e);
