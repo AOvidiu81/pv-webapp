@@ -271,15 +271,7 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
     <table class="doc-table doc-parties-table">
       <tr><td>PRESTATOR</td><td class="right">BENEFICIAR</td></tr>
       <tr>
-        <td>
-          <div class="doc-parties-prestator">
-            <strong>${esc(COMPANY_INFO.name)}</strong>
-            <div class="doc-stamp-slot doc-stamp-slot-sm">
-              ${driverSignatureUrl ? `<img class="doc-stamp-signature" src="${driverSignatureUrl}" alt="" />` : ''}
-              ${stampAvailable ? `<img class="doc-stamp-img" src="assets/docs/stampila_euro_ecologic.png" alt="" />` : ''}
-            </div>
-          </div>
-        </td>
+        <td><strong>${esc(COMPANY_INFO.name)}</strong></td>
         <td class="right"><strong>${esc((model.clientName || 'DENUMIRE BENEFICIAR').toUpperCase())}</strong></td>
       </tr>
     </table>

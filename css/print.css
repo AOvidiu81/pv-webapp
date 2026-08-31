@@ -160,8 +160,6 @@
 .doc-parties-table { margin-top: auto; padding-top: 3mm; font-family: Arial, sans-serif; font-size: 8.4pt; }
 .doc-parties-table td { border: 0.7pt solid var(--doc-border-strong); }
 .doc-parties-table td.right { text-align: right; }
-.doc-parties-prestator { display: flex; align-items: center; justify-content: space-between; gap: 2mm; }
-.doc-stamp-slot-sm { width: 15mm; height: 15mm; flex-shrink: 0; }
 
 .doc-footer { margin-top: 3mm; }
 .doc-footer-rule { height: 0.9pt; background: var(--doc-red); margin-bottom: 1.6mm; }
