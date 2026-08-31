@@ -429,15 +429,29 @@ function captureSignatureScreen(title) {
       maxY = -Infinity;
     }
 
+    // Roteste un canvas 90° in sens trigonometric (CCW) intr-unul nou
+    // (latime/inaltime interschimbate). Folosit DOAR la salvare (o singura
+    // data pe imaginea deja capturata), NU live pe fiecare atingere — vezi
+    // comentariul din save() de mai jos pentru motiv.
+    function rotateCanvasCCW(src) {
+      const rotated = document.createElement('canvas');
+      rotated.width = src.height;
+      rotated.height = src.width;
+      const rctx = rotated.getContext('2d');
+      rctx.translate(0, rotated.height);
+      rctx.rotate(-Math.PI / 2);
+      rctx.drawImage(src, 0, 0);
+      return rotated;
+    }
+
     function save() {
       if (!hasStrokes) {
         showToast('Semneaza in chenar inainte de validare.');
         return;
       }
       // Decupam semnatura la conturul cernelii desenate (+ un mic padding),
-      // in loc sa exportam tot canvas-ul lat/gol — ca imaginea rezultata sa
-      // aiba proportia semnaturii reale si sa umple bine chenarul alocat in
-      // documentul PV (care are o forma/dimensiune similara, de tip landscape).
+      // in loc sa exportam tot canvas-ul gol in jur — ca imaginea rezultata
+      // sa aiba proportia semnaturii reale.
       const ratio = window.devicePixelRatio || 1;
       const PAD = 14; // padding, in pixeli CSS
       const cssW = canvas.width / ratio;
@@ -447,23 +461,33 @@ function captureSignatureScreen(title) {
       const cropW = Math.min(cssW, maxX + PAD) - cropX;
       const cropH = Math.min(cssH, maxY + PAD) - cropY;
 
+      let out;
       if (!(cropW > 0) || !(cropH > 0)) {
-        canvas.toBlob((blob) => pop(blob), 'image/png');
-        return;
+        out = canvas;
+      } else {
+        out = document.createElement('canvas');
+        out.width = Math.round(cropW * ratio);
+        out.height = Math.round(cropH * ratio);
+        const outCtx = out.getContext('2d');
+        outCtx.drawImage(
+          canvas,
+          Math.round(cropX * ratio), Math.round(cropY * ratio),
+          Math.round(cropW * ratio), Math.round(cropH * ratio),
+          0, 0,
+          out.width, out.height
+        );
       }
-
-      const out = document.createElement('canvas');
-      out.width = Math.round(cropW * ratio);
-      out.height = Math.round(cropH * ratio);
-      const outCtx = out.getContext('2d');
-      outCtx.drawImage(
-        canvas,
-        Math.round(cropX * ratio), Math.round(cropY * ratio),
-        Math.round(cropW * ratio), Math.round(cropH * ratio),
-        0, 0,
-        out.width, out.height
-      );
-      out.toBlob((blob) => pop(blob), 'image/png');
+      // Chenarul de desenat RAMANE vertical pe ecran (fara nicio rotatie CSS
+      // — vezi styles.css), la fel pe PC ca pe telefon. Soferul intoarce
+      // telefonul fizic ca sa semneze (asa a lucrat mereu, indiferent de
+      // indicii pe ecran), asa ca cerneala capturata iese, in coordonatele
+      // brute ale canvas-ului, "culcata" pe verticala. O rotim aici o
+      // SINGURA data, pe imaginea deja decupata (nu pe fiecare eveniment de
+      // atingere, ca in varianta veche cu CSS — mult mai simplu si robust),
+      // ca semnatura sa apara mereu orizontala in documentul PV, indiferent
+      // daca soferul a intors telefonul sau nu.
+      const rotated = rotateCanvasCCW(out);
+      rotated.toBlob((blob) => pop(blob), 'image/png');
     }
 
     return screen;

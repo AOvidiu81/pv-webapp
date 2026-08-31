@@ -4,7 +4,7 @@
 // Trebuie tinut manual sincron cu CACHE_VERSION din sw.js la fiecare
 // modificare — afisat pe ecranul de login/acasa ca soferul sa poata
 // confirma dintr-o privire ce versiune ruleaza pe telefon.
-export const APP_VERSION = 'v33';
+export const APP_VERSION = 'v34';
 
 const DIACRITICS_MAP = {
   'ă': 'a', 'â': 'a', 'î': 'i', 'ș': 's', 'ş': 's', 'ț': 't', 'ţ': 't',
