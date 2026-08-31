@@ -267,7 +267,19 @@ function captureSignatureScreen(title) {
     // trucul care face chenarul sa umple exact spatiul disponibil, oricat
     // de mare/mic ar fi el pe telefonul respectiv.
     const rowWrap = el('div', { class: 'signature-row-wrap' }, [row]);
+    // Chenarul de desenat (row) e rotit CSS cu 90° ca sa fie "lat" — asta
+    // functioneaza corect DOAR daca soferul intoarce telefonul FIZIC pe
+    // lateral inainte sa semneze (vezi comentariul de mai sus/din styles.css).
+    // Fara niciun indiciu pe ecran, soferul semna cu telefonul drept, iar
+    // semnatura iese rotita/verticala in PV — de-aia avem acest banner,
+    // afisat INAINTE de chenar (nerotit, ca sa se citeasca normal cat timp
+    // telefonul e inca in picioare).
+    const rotateHint = el('div', { class: 'signature-rotate-hint' }, [
+      el('span', { class: 'signature-rotate-hint-icon' }, ['📱↻']),
+      el('span', {}, ['Intoarce telefonul pe lateral, apoi semneaza in chenar']),
+    ]);
     screen.appendChild(topBar);
+    screen.appendChild(rotateHint);
     screen.appendChild(rowWrap);
     screen.appendChild(el('div', { class: 'signature-hint' }, ['Semneaza in chenar folosind degetul sau stylus-ul.']));
 

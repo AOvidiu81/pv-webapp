@@ -229,6 +229,25 @@ select.field-input { appearance: none; background-image: linear-gradient(45deg, 
    citeasca acest chenar normal — dar acum functioneaza garantat, pe orice
    telefon/browser, indiferent daca e instalat ca aplicatie sau deschis
    intr-un tab obisnuit. */
+/* Banner afisat INAINTE de chenarul rotit (vezi mai jos), cat timp telefonul
+   e inca in pozitie normala (in picioare) — singurul moment in care un
+   indiciu despre rotirea telefonului chiar se citeste normal. Fara el,
+   soferul semneaza cu telefonul drept, iar semnatura iese rotita/verticala
+   in PV (chenarul de desenat presupune ca telefonul a fost intors). */
+.signature-rotate-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--brand-accent-light);
+  color: var(--brand-primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid #bfe6e6;
+}
+.signature-rotate-hint-icon { font-size: 16px; }
 .signature-row-wrap { flex: 1; position: relative; overflow: hidden; min-height: 0; }
 .signature-row {
   position: absolute;

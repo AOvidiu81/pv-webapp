@@ -303,14 +303,26 @@ export async function shareOrDownloadPdf(blob, fileName, { title, text } = {}) {
     file = null;
   }
 
-  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+  const canShareFiles = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
+  if (canShareFiles) {
     try {
       await navigator.share({ files: [file], title: title || safeName, text: text || '' });
       return 'shared';
     } catch (e) {
       if (e && e.name === 'AbortError') return 'cancelled';
-      // continuam cu descarcarea ca rezerva daca share esueaza dintr-un alt motiv
+      // continuam cu descarcarea ca rezerva daca share esueaza dintr-un alt
+      // motiv — dar lasam un semnal in consola (vizibil prin depanare USB /
+      // chrome://inspect), altfel cauza reala pentru care cade pe descarcare
+      // in loc sa deschida meniul de distribuire (WhatsApp etc.) ramane
+      // invizibila.
+      console.warn('[shareOrDownloadPdf] navigator.share() a esuat, cad pe descarcare:', e && e.name, e && e.message);
     }
+  } else {
+    console.warn('[shareOrDownloadPdf] distribuirea nu e disponibila pentru acest fisier (canShare=false), cad pe descarcare.', {
+      hasNavigatorShare: !!navigator.share,
+      hasCanShare: !!navigator.canShare,
+      hasFile: !!file,
+    });
   }
 
   downloadPdf(blob, safeName);

@@ -568,6 +568,17 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
       if (!cachedBlobPromise) cachedBlobPromise = generateDocumentPdfBlob(html);
       return cachedBlobPromise;
     }
+    // Pornim generarea PDF-ului DIN ACEST MOMENT (nu abia la apasarea unui
+    // buton) — randarea (mai ales cu poze la Anexa Foto) poate lua o secunda
+    // sau mai mult pe telefoane mai slabe. Daca am astepta acest timp DUPA
+    // click, pana apelam efectiv navigator.share() in shareOrDownloadPdf()
+    // ar fi putut trece prea mult timp de la gestul soferului (tap), iar
+    // browserul poate refuza share() ca sigur nu mai vine de la o actiune
+    // directa a utilizatorului (fara nicio eroare vizibila — cade tacut pe
+    // descarcare simpla in loc sa deschida meniul catre WhatsApp etc). Cu
+    // PDF-ul deja gata cand apasa "Trimite", share() porneste aproape
+    // instant dupa tap, in fereastra de timp garantata de browser.
+    getPdfBlob().catch(() => {});
 
     const saveBtn = el('button', { class: 'btn btn-outline', style: 'flex:1' }, ['💾  Salveaza PDF']);
     let saveBusy = false;
