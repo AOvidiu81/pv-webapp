@@ -234,11 +234,13 @@ export function captureSignature({ title = 'Semnatura' } = {}) {
 }
 
 function captureSignatureScreen(title) {
-  // Referinta ridicata in afara builder-ului lui pushScreen(), ca sa putem
+  // Referinte ridicate in afara builder-ului lui pushScreen(), ca sa putem
   // opri urmarirea dimensiunilor cand ecranul se inchide, indiferent cum
   // iese soferul din el (buton, salvare sau Back hardware) — vezi
   // promise.finally() mai jos.
   let resizeObserver = null;
+  let rowResizeObserver = null;
+  let onWindowResize = null;
   const promise = pushScreen(({ pop }) => {
     const canvasWrap = el('div', { class: 'signature-canvas-wrap' });
     const canvas = el('canvas', { class: 'signature-canvas' });
@@ -252,13 +254,52 @@ function captureSignatureScreen(title) {
     ]);
     const clearBtn = el('button', { class: 'sig-side-btn sig-clear', onclick: () => { hapticTap(); clear(); } }, ['⟲']);
     const okBtn = el('button', { class: 'sig-side-btn sig-ok', onclick: () => { hapticTap(); save(); } }, ['✓']);
-    // Chenarul de desenat NU mai e rotit — telefonul ramane drept, deci
-    // ordinea naturala in DOM e si ordinea vazuta de sofer: rosu (sterge) in
-    // stanga, verde (validare) in dreapta.
+    // Aceeasi ordine in DOM functioneaza in ambele moduri (vezi CSS):
+    // nerotit (coloana) -> rosu sus, verde jos; rotit is-landscape (randul
+    // pre-rotatie e stanga/dreapta) -> dupa rotatia CW, rosu tot sus, verde
+    // tot jos, vazute de sofer.
     const row = el('div', { class: 'signature-row' }, [clearBtn, canvasWrap, okBtn]);
+    const rowWrap = el('div', { class: 'signature-row-wrap' }, [row]);
     screen.appendChild(topBar);
-    screen.appendChild(row);
+    screen.appendChild(rowWrap);
     screen.appendChild(el('div', { class: 'signature-hint' }, ['Semneaza in chenar folosind degetul sau stylus-ul.']));
+
+    // Chenarul trebuie sa arate mereu la fel (ingust, "in picioare"),
+    // indiferent daca soferul a intors telefonul fizic sau nu — dar
+    // browserul insusi reflowuieste pagina cand fereastra devine "culcata"
+    // (telefon intors, fara blocare de orientare). Detectam asta comparand
+    // dimensiunile ferestrei si comutam clasa is-landscape (vezi CSS), care
+    // roteste chenarul cu CSS ca sa compenseze si sa arate identic. Verificam
+    // la fiecare resize al lui rowWrap (acopera si rotirea telefonului, care
+    // declanseaza un resize al intregii pagini).
+    function resizeRow() {
+      const wrapRect = rowWrap.getBoundingClientRect();
+      if (!wrapRect.width || !wrapRect.height) return;
+      const landscape = window.innerWidth > window.innerHeight;
+      row.classList.toggle('is-landscape', landscape);
+      if (landscape) {
+        // Dimensiuni locale (pre-rotatie) interschimbate — acelasi truc
+        // verificat empiric anterior — ca dupa rotatia CSS chenarul sa umple
+        // exact spatiul (acum lat) rezervat de rowWrap.
+        row.style.width = wrapRect.height + 'px';
+        row.style.height = wrapRect.width + 'px';
+      } else {
+        row.style.width = wrapRect.width + 'px';
+        row.style.height = wrapRect.height + 'px';
+      }
+    }
+    if (window.ResizeObserver) {
+      rowResizeObserver = new ResizeObserver(resizeRow);
+      rowResizeObserver.observe(rowWrap);
+    } else {
+      requestAnimationFrame(resizeRow);
+    }
+    // ResizeObserver pe rowWrap nu prinde intotdeauna schimbarea de
+    // orientare pe unele telefoane (rowWrap isi poate pastra aceeasi
+    // dimensiune daca topbar/hint-ul cresc compensator) — ascultam si
+    // resize-ul ferestrei intregi, ca sigurantza in plus.
+    onWindowResize = () => resizeRow();
+    window.addEventListener('resize', onWindowResize);
 
     const ctx = canvas.getContext('2d');
     let drawing = false;
@@ -338,12 +379,19 @@ function captureSignatureScreen(title) {
       }, 350);
     }
 
-    // Chenarul nu mai e rotit CSS, asa ca maparea e cea directa: coordonata
-    // locala din canvas = coordonata de viewport a evenimentului minus
-    // coltul stanga-sus al lui canvas.getBoundingClientRect().
+    // canvas.getBoundingClientRect() da mereu dreptunghiul CORECT (rotit
+    // cand is-landscape e activa) in coordonate de viewport — dar
+    // clientX/clientY ale evenimentelor de touch/mouse raman mereu in
+    // coordonate de viewport NEROTITE. Cand row NU e rotit, maparea e
+    // directa; cand e rotit 90° CW (is-landscape), transformarea inversa
+    // (viewport -> local canvas) e: x local = clientY - rect.top, y local =
+    // rect.right - clientX (verificat empiric anterior).
     function pointFromEvent(e) {
       const rect = canvas.getBoundingClientRect();
       const point = e.touches ? e.touches[0] : e;
+      if (row.classList.contains('is-landscape')) {
+        return { x: point.clientY - rect.top, y: rect.right - point.clientX };
+      }
       return { x: point.clientX - rect.left, y: point.clientY - rect.top };
     }
     function extendBounds(p) {
@@ -429,21 +477,6 @@ function captureSignatureScreen(title) {
       maxY = -Infinity;
     }
 
-    // Roteste un canvas 90° in sens trigonometric (CCW) intr-unul nou
-    // (latime/inaltime interschimbate). Folosit DOAR la salvare (o singura
-    // data pe imaginea deja capturata), NU live pe fiecare atingere — vezi
-    // comentariul din save() de mai jos pentru motiv.
-    function rotateCanvasCCW(src) {
-      const rotated = document.createElement('canvas');
-      rotated.width = src.height;
-      rotated.height = src.width;
-      const rctx = rotated.getContext('2d');
-      rctx.translate(0, rotated.height);
-      rctx.rotate(-Math.PI / 2);
-      rctx.drawImage(src, 0, 0);
-      return rotated;
-    }
-
     function save() {
       if (!hasStrokes) {
         showToast('Semneaza in chenar inainte de validare.');
@@ -477,23 +510,19 @@ function captureSignatureScreen(title) {
           out.width, out.height
         );
       }
-      // Chenarul de desenat RAMANE vertical pe ecran (fara nicio rotatie CSS
-      // — vezi styles.css), la fel pe PC ca pe telefon. Soferul intoarce
-      // telefonul fizic ca sa semneze (asa a lucrat mereu, indiferent de
-      // indicii pe ecran), asa ca cerneala capturata iese, in coordonatele
-      // brute ale canvas-ului, "culcata" pe verticala. O rotim aici o
-      // SINGURA data, pe imaginea deja decupata (nu pe fiecare eveniment de
-      // atingere, ca in varianta veche cu CSS — mult mai simplu si robust),
-      // ca semnatura sa apara mereu orizontala in documentul PV, indiferent
-      // daca soferul a intors telefonul sau nu.
-      const rotated = rotateCanvasCCW(out);
-      rotated.toBlob((blob) => pop(blob), 'image/png');
+      // NU mai rotim imaginea aici — cerneala a fost deja capturata direct
+      // in orientarea corecta (orizontala) chiar in bitmap-ul brut al
+      // canvas-ului, gratie mapei is-landscape de mai sus (activa cand
+      // telefonul a fost intors fizic, ceea ce roteste automat fereastra).
+      out.toBlob((blob) => pop(blob), 'image/png');
     }
 
     return screen;
   });
   return promise.finally(() => {
     if (resizeObserver) resizeObserver.disconnect();
+    if (rowResizeObserver) rowResizeObserver.disconnect();
+    if (onWindowResize) window.removeEventListener('resize', onWindowResize);
   });
 }
 

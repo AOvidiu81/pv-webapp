@@ -574,16 +574,40 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     // click, pana apelam efectiv navigator.share() in shareOrDownloadPdf()
     // ar fi putut trece prea mult timp de la gestul soferului (tap), iar
     // browserul poate refuza share() ca sigur nu mai vine de la o actiune
-    // directa a utilizatorului (fara nicio eroare vizibila — cade tacut pe
-    // descarcare simpla in loc sa deschida meniul catre WhatsApp etc). Cu
+    // directa a utilizatorului — evidente reale au aratat exact asta
+    // ("NotAllowedError: Permission denied" din navigator.share()). Cu
     // PDF-ul deja gata cand apasa "Trimite", share() porneste aproape
-    // instant dupa tap, in fereastra de timp garantata de browser.
-    getPdfBlob().catch(() => {});
+    // instant dupa tap. Dar generarea eager singura nu ajunge daca soferul
+    // apasa INAINTE sa se termine — de-aia butoanele raman dezactivate (mai
+    // jos) pana cand promisiunea chiar se rezolva, ca await-ul din click sa
+    // nu mai astepte NIMIC (garantand ca share() ramane in fereastra de timp
+    // a gestului).
+    const saveBtn = el('button', { class: 'btn btn-outline', style: 'flex:1', disabled: true }, ['⏳  Se pregateste PDF-ul...']);
+    const sendBtn = el('button', { class: 'btn btn-outline', style: 'flex:1', disabled: true }, ['⏳  Se pregateste PDF-ul...']);
+    const sendBtnLabel = '📤  Trimite';
+    let pdfReady = false;
+    getPdfBlob()
+      .then(() => {
+        pdfReady = true;
+        saveBtn.textContent = '💾  Salveaza PDF';
+        saveBtn.disabled = false;
+        sendBtn.textContent = sendBtnLabel;
+        sendBtn.disabled = false;
+      })
+      .catch(() => {
+        // Lasam butoanele activate chiar daca generarea eager a esuat —
+        // click-ul insusi va incerca din nou (si va arata eroarea reala prin
+        // catch-ul de mai jos) in loc sa blocheze soferul definitiv.
+        pdfReady = true;
+        saveBtn.textContent = '💾  Salveaza PDF';
+        saveBtn.disabled = false;
+        sendBtn.textContent = sendBtnLabel;
+        sendBtn.disabled = false;
+      });
 
-    const saveBtn = el('button', { class: 'btn btn-outline', style: 'flex:1' }, ['💾  Salveaza PDF']);
     let saveBusy = false;
     saveBtn.addEventListener('click', async () => {
-      if (saveBusy) return;
+      if (saveBusy || !pdfReady) return;
       saveBusy = true;
       const originalLabel = saveBtn.textContent;
       saveBtn.textContent = 'Se pregateste...';
@@ -608,10 +632,9 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
       }
     });
 
-    const sendBtn = el('button', { class: 'btn btn-outline', style: 'flex:1' }, ['📤  Trimite']);
     let sendBusy = false;
     sendBtn.addEventListener('click', async () => {
-      if (sendBusy) return;
+      if (sendBusy || !pdfReady) return;
       sendBusy = true;
       const originalLabel = sendBtn.textContent;
       sendBtn.textContent = 'Se pregateste...';

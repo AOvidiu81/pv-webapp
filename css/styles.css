@@ -215,28 +215,48 @@ select.field-input { appearance: none; background-image: linear-gradient(45deg, 
 
 /* Signature screen */
 .signature-screen { display: flex; flex-direction: column; height: 100%; background: var(--surface); }
-/* Chenarul de desenat NU mai e rotit cu CSS (am incercat asta si necesita ca
-   soferul sa intoarca telefonul fizic pe lateral — evidente reale au aratat
-   ca atunci cand nu o face, semnatura iese verticala/stramba in PV). Acum
-   chenarul ramane in pozitia lui naturala (nerotita), telefonul sta drept in
-   mana ca la restul aplicatiei — soferul scrie normal in chenar, cu degetul
-   sau stylus-ul. La salvare (functia save()), semnatura e decupata strans pe
-   conturul cernelii desenate efectiv (minX/minY/maxX/maxY), nu pe tot
-   chenarul — iar o semnatura scrisa de mana e in mod natural mai lata decat
-   inalta, asa ca rezultatul decupat iese "landscape" de la sine, fara sa
-   depinda de orientarea fizica a telefonului. */
+/* Chenarul de desenat trebuie sa RAMANA VIZUAL neschimbat (ingust, "in
+   picioare") INDIFERENT daca soferul intoarce telefonul fizic sau nu —
+   pozitia trebuie sa ramana fixa pe ecran, exact ca inainte. Problema e ca
+   browserul insusi roteste automat pagina intreaga cand telefonul e intors
+   (nu blocam si nu putem bloca fiabil orientarea din CSS singur) — asa ca
+   .signature-row-wrap ramane normal (nerotit) cat timp fereastra e "in
+   picioare", dar cand JS detecteaza ca fereastra a devenit "culcata" (adica
+   soferul a intors telefonul), adaugam clasa is-landscape, care roteste
+   chenarul (.signature-row) cu CSS ca sa arate EXACT LA FEL (ingust, cu
+   banda rosie sus si verde jos) chiar daca spatiul disponibil e acum lat —
+   vezi resizeRow()/pointFromEvent() din components.js. Cerneala desenata
+   ajunge asa direct in pozitia corecta (orizontala) in bitmap-ul brut al
+   canvas-ului, fara sa mai fie nevoie de nicio rotatie ulterioara la
+   salvare. */
+.signature-row-wrap { flex: 1; position: relative; overflow: hidden; min-height: 0; }
 .signature-row {
-  flex: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: stretch;
   gap: 12px;
   padding: 10px 14px;
-  min-height: 0;
+}
+.signature-row.is-landscape {
+  /* Pre-rotatie (inainte de transform) asezam butoanele STANGA/DREAPTA
+     (flex-direction:row) special ca dupa rotatia CW de mai jos sa iasa
+     SUS/JOS — verificat empiric (acelasi mecanism folosit si inainte,
+     documentat in pointFromEvent()). */
+  flex-direction: row;
+  transform-origin: top left;
+  transform: rotate(90deg) translateY(-100%);
 }
 .signature-canvas-wrap { flex: 1; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); position: relative; overflow: hidden; touch-action: none; min-height: 0; min-width: 0; }
 .signature-canvas { width: 100%; height: 100%; touch-action: none; display: block; }
-.sig-side-btn { height: 56px; width: auto; border: none; border-radius: 12px; font-size: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+/* flex:0 0 56px = grosimea benzii (56px), pe axa principala a lui .row
+   (verticala cand nerotit, orizontala cand rotit) — align-items:stretch pe
+   parinte face ca banda sa ocupe intotdeauna toata latimea MICA a
+   chenarului (nu mai fixam explicit width/height aici, ca sa functioneze
+   corect in ambele moduri). */
+.sig-side-btn { flex: 0 0 56px; border: none; border-radius: 12px; font-size: 22px; display: flex; align-items: center; justify-content: center; }
 .sig-clear { background: #f7d9df; color: #8f3145; }
 .sig-ok { background: #ddf4d7; color: #256b29; }
 .signature-hint { text-align: center; font-size: 12.5px; color: var(--ink-soft); padding: 0 20px calc(22px + env(safe-area-inset-bottom, 0px)); }
