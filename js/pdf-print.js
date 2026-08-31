@@ -254,7 +254,7 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
 
     ${
       needsAviz
-        ? `<div class="doc-return-message doc-return-message-p1">VA ROG SA RETRIMITETI ACEST P.V. DE ${esc(processTypeUpper || 'AMPLASARE')}, SEMNAT SI STAMPILAT LA ADRESA DE EMAIL: ${esc(model.avizReturnEmail || '')}</div>`
+        ? `<div class="doc-return-message doc-return-message-p1">TRIMITETI ACEST P.V. DE ${esc(processTypeUpper || 'AMPLASARE')}, SEMNAT SI STAMPILAT, LA ADRESA DE E-MAIL: ${esc(model.avizReturnEmail || '')}</div>`
         : ''
     }
 
