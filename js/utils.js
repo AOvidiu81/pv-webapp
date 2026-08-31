@@ -164,6 +164,37 @@ export function debounce(fn, delay = 250) {
  * daca fontul de baza s-a schimbat intre timp), reporneste mereu de la
  * dimensiunea CSS originala.
  */
+/**
+ * Asteapta ca toate imaginile (<img>) din interiorul lui "root" sa fie
+ * incarcate (sau esuate) inainte de a continua — folosit inaintea oricarei
+ * masuratori de layout (ex. shrinkProductsTableToFit), pentru ca un <img>
+ * fara width/height explicit (ex. antetul ".doc-header-img") are inaltime 0
+ * cat timp nu s-a incarcat, ceea ce ar duce la o estimare gresita a
+ * spatiului disponibil pentru tabelul de produse — si, dupa ce imaginea se
+ * incarca in cele din urma, la o pagina care depaseste totusi cele 297mm
+ * (randuri taiate silentios), desi tabelul parea sa incapa la masuratoare.
+ * Sigur de apelat oricand — daca imaginea e deja incarcata (des cazul, fiind
+ * in cache-ul browserului dupa prima folosire a aplicatiei), se rezolva
+ * aproape instant.
+ */
+export async function waitForImagesLoaded(root) {
+  if (!root) return;
+  const imgs = Array.from(root.querySelectorAll('img'));
+  await Promise.all(
+    imgs.map((img) => {
+      if (img.complete) {
+        // "complete" e true si pentru o imagine care a esuat la incarcare —
+        // in ambele cazuri layoutul e deja stabil, nu mai asteptam nimic.
+        return img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+      }
+      return new Promise((resolve) => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    })
+  );
+}
+
 export function shrinkTextToFitOneLine(el, { minFontSizePx = 9, stepPx = 0.5 } = {}) {
   if (!el) return;
   const computed = window.getComputedStyle(el);
@@ -178,6 +209,87 @@ export function shrinkTextToFitOneLine(el, { minFontSizePx = 9, stepPx = 0.5 } =
     guard += 1;
   }
   if (guard === 0) el.style.fontSize = originalFontSize; // nu a fost nevoie sa micsoram, pastram CSS-ul original
+}
+
+/**
+ * Micsoreaza tabelul de produse (".doc-table-frame" de pe pagina PV) pas cu
+ * pas — font-size + padding pe randuri — pana cand TOATA pagina incape in
+ * inaltimea fixa de tiparire (297mm, A4), daca beneficiarul are multe
+ * categorii de produse. Fara asta, motorul de tiparire/export (care
+ * forteaza fiecare ".doc-page" la o inaltime FIXA de 297mm) taia silentios
+ * randurile care nu incap — soferul nu vede nicio eroare, produsele pur si
+ * simplu lipsesc din PDF-ul salvat/trimis (desc doperit empiric).
+ *
+ * Foloseste o inaltime de proba de 297mm (aceeasi ca in css/print.css sub
+ * @media print si ca in pdf-generate.js) — 1mm inseamna mereu acelasi numar
+ * de pixeli in CSS, indiferent de contextul de randare (ecran real, host
+ * ascuns offscreen etc.), asa ca verificarea functioneaza identic peste
+ * tot. Restauram inaltimea originala a paginii dupa masuratoare, ca sa nu
+ * lasam un stil inline care ar strica randarea normala (ne-tiparita).
+ */
+export function shrinkProductsTableToFit(root, { minFontSizePx = 7.6, minPaddingVMm = 0.3, minLineHeight = 1, stepPx = 0.1 } = {}) {
+  if (!root) return;
+  root.querySelectorAll('.doc-page').forEach((pageEl) => {
+    const frame = pageEl.querySelector('.doc-table-frame');
+    const table = frame ? frame.querySelector('table') : null;
+    if (!frame || !table) return;
+
+    const cells = table.querySelectorAll('th, td');
+    // Repornim mereu de la dimensiunea CSS originala (tabelul poate fi
+    // remasurat de mai multe ori — ex. preview redeschis dupa o corectie).
+    table.style.fontSize = '';
+    table.style.lineHeight = '';
+    cells.forEach((cell) => { cell.style.padding = ''; });
+
+    const originalHeight = pageEl.style.height;
+    const originalOverflow = pageEl.style.overflow;
+    pageEl.style.height = '297mm';
+    pageEl.style.overflow = 'hidden';
+
+    // IMPORTANT: NU verificam pageEl.scrollHeight > pageEl.clientHeight —
+    // ".doc-page" e flex-column, iar ".doc-table-frame" (chenarul verde,
+    // are deja "overflow:hidden" din CSS pentru colturile rotunjite) e un
+    // flex item obisnuit, care se poate MICSORA sub inaltimea lui naturala
+    // ca sa incapa restul continutului in cele 297mm — motorul de layout
+    // "rezolva" astfel overflow-ul paginii silentios, taind randurile din
+    // tabel INTERN, fara ca ".doc-page" insusi sa mai raporteze vreun
+    // overflow (scrollHeight == clientHeight acolo, desi tabelul e taiat!).
+    // De-asta verificam direct chenarul tabelului: daca CONTINUTUL lui
+    // (randurile) e mai inalt decat SPATIUL pe care i l-a dat efectiv
+    // layout-ul, inseamna ca randuri intregi sunt invizibile in acest
+    // moment — de aici stim sigur cand trebuie sa micsoram.
+    const basePaddingVMm = 1.4; // vezi ".doc-table th, .doc-table td" in print.css
+    const baseFontSizePx = parseFloat(window.getComputedStyle(table).fontSize);
+    const basePaddingH = '2mm';
+
+    // Pasul 1: reducem intai spatiul gol (padding pe randuri + line-height),
+    // pastrand fontul la marimea originala — asta afecteaza legibilitatea
+    // cel mai putin. Testam la fiecare pas daca a inceput sa incapa.
+    let paddingVMm = basePaddingVMm;
+    let lineHeight = 1.32; // vezi ".doc-page" in print.css (mostenit de tabel)
+    let guard = 0;
+    while (frame.scrollHeight > frame.clientHeight && (paddingVMm > minPaddingVMm || lineHeight > minLineHeight) && guard < 100) {
+      paddingVMm = Math.max(minPaddingVMm, paddingVMm - 0.05);
+      lineHeight = Math.max(minLineHeight, lineHeight - 0.015);
+      cells.forEach((cell) => { cell.style.padding = `${paddingVMm}mm ${basePaddingH}`; });
+      table.style.lineHeight = String(lineHeight);
+      guard += 1;
+    }
+
+    // Pasul 2: daca tot nu incape (multe randuri + liste lungi de conditii
+    // pe aceeasi pagina), reducem si fontul, pastrand padding-ul si
+    // line-height-ul deja la minim de mai sus.
+    let fontSizePx = baseFontSizePx;
+    guard = 0;
+    while (frame.scrollHeight > frame.clientHeight && fontSizePx > minFontSizePx && guard < 100) {
+      fontSizePx -= stepPx;
+      table.style.fontSize = fontSizePx + 'px';
+      guard += 1;
+    }
+
+    pageEl.style.height = originalHeight;
+    pageEl.style.overflow = originalOverflow;
+  });
 }
 
 export function el(tag, attrs = {}, children = []) {

@@ -16,6 +16,8 @@ import {
   withoutDiacritics,
   fileToken,
   shrinkTextToFitOneLine,
+  shrinkProductsTableToFit,
+  waitForImagesLoaded,
 } from './utils.js';
 import { CONDITIONS_BY_TYPE, COMPANY_INFO, confirmationBanner } from './catalog-defaults.js';
 import { displayPvNumber, displayAvizNumber } from './pv-numbering.js';
@@ -452,7 +454,9 @@ export function buildDocumentHtml(params) {
 // singur rand (vezi shrinkTextToFitOneLine din utils.js) — indiferent de
 // lungimea lui (tip proces + adresa de email pot varia). Functie comuna,
 // apelata din toate cele 3 locuri unde documentul e randat efectiv (preview
-// in-app, tiparire nativa, export PDF din pdf-generate.js).
+// in-app, tiparire nativa, export PDF din pdf-generate.js) — la fel ca
+// shrinkProductsTableToFit (vezi utils.js), apelata imediat dupa, in
+// aceleasi 3 locuri.
 function fitReturnMessages(root) {
   root.querySelectorAll('.doc-return-message').forEach((el) => shrinkTextToFitOneLine(el));
 }
@@ -461,9 +465,15 @@ function fitReturnMessages(root) {
  * Deschide fereastra de tiparire a browserului cu documentul dat, afisand
  * dialogul nativ de "Salveaza ca PDF" (Chrome pe Android).
  */
-export function printDocument(html, suggestedTitle) {
+export async function printDocument(html, suggestedTitle) {
   const printRoot = document.getElementById('print-root');
   printRoot.innerHTML = html;
+  // Imaginile (antet, footer, stampila) incep sa se incarce imediat ce sunt
+  // inserate in DOM, chiar daca #print-root e "display:none" — asteptam sa
+  // se termine ACUM (de obicei aproape instant, fiind deja in cache-ul
+  // aplicatiei), inainte de "beforeprint", ca masuratoarea tabelului de
+  // produse de mai jos sa vada inaltimea reala a antetului, nu 0.
+  await waitForImagesLoaded(printRoot);
   const previousTitle = document.title;
   if (suggestedTitle) document.title = suggestedTitle;
   // #print-root e "display:none" in afara @media print (vezi print.css) —
@@ -472,7 +482,10 @@ export function printDocument(html, suggestedTitle) {
   // fontului mai devreme. "beforeprint" e evenimentul care se declanseaza
   // chiar in momentul in care browserul comuta pe stilurile de print,
   // exact cand avem nevoie sa masuram/ajustam.
-  const onBeforePrint = () => fitReturnMessages(printRoot);
+  const onBeforePrint = () => {
+    fitReturnMessages(printRoot);
+    shrinkProductsTableToFit(printRoot);
+  };
   window.addEventListener('beforeprint', onBeforePrint);
   const restore = () => {
     document.title = previousTitle;
@@ -491,6 +504,26 @@ export function printDocument(html, suggestedTitle) {
  * telefon, cu buton pentru a deschide dialogul de tiparire/salvare PDF.
  */
 export async function openPrintPreview({ html, title = 'Previzualizare document', suggestedFileName, showBadge = false, onConfirmPrint }) {
+  // Fiecare .doc-page e mutata intr-un "frame" care primeste dimensiunile
+  // FINALE (scalate) prin JS, ca layout-ul normal (centrare, spatiere) sa
+  // functioneze corect indiferent de transform-ul aplicat paginii interioare.
+  const measureHost = el('div', { style: 'position:absolute;visibility:hidden;pointer-events:none;left:-9999px;top:0' });
+  measureHost.innerHTML = html;
+  document.body.appendChild(measureHost);
+  // IMPORTANT: asteptam ca imaginile (antet, footer, stampila) sa fie
+  // incarcate INAINTE sa masuram orice inaltime mai jos — un <img> fara
+  // width/height explicit (ex. ".doc-header-img") are inaltime 0 cat timp
+  // nu s-a incarcat, ceea ce ar duce la o estimare gresita a spatiului
+  // disponibil pentru tabelul de produse (de obicei imaginile sunt deja in
+  // cache-ul aplicatiei, deci asta se rezolva aproape instant).
+  await waitForImagesLoaded(measureHost);
+  // Inainte sa masuram dimensiunile naturale ale paginii (mai jos) —
+  // altfel, daca textul rosu s-ar micsora DUPA masuratoare, inaltimea
+  // paginii calculata aici ar ramane cea veche (cu 2 randuri), gresita.
+  fitReturnMessages(measureHost);
+  shrinkProductsTableToFit(measureHost);
+  const sourcePages = Array.from(measureHost.querySelectorAll('.doc-page'));
+
   return pushScreen(({ pop }) => {
     const screen = el('div', { class: 'preview-screen' });
     const topBar = el('div', { class: 'topbar' }, [
@@ -501,17 +534,6 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     if (showBadge) screen.appendChild(el('div', { class: 'preview-badge' }, ['PREVIEW']));
 
     const pagesHost = el('div', { class: 'preview-pages' });
-    // Fiecare .doc-page e mutata intr-un "frame" care primeste dimensiunile
-    // FINALE (scalate) prin JS, ca layout-ul normal (centrare, spatiere) sa
-    // functioneze corect indiferent de transform-ul aplicat paginii interioare.
-    const measureHost = el('div', { style: 'position:absolute;visibility:hidden;pointer-events:none;left:-9999px;top:0' });
-    measureHost.innerHTML = html;
-    document.body.appendChild(measureHost);
-    // Inainte sa masuram dimensiunile naturale ale paginii (mai jos) —
-    // altfel, daca textul rosu s-ar micsora DUPA masuratoare, inaltimea
-    // paginii calculata aici ar ramane cea veche (cu 2 randuri), gresita.
-    fitReturnMessages(measureHost);
-    const sourcePages = Array.from(measureHost.querySelectorAll('.doc-page'));
     const frames = sourcePages.map((page) => {
       const naturalWidth = page.offsetWidth;
       const naturalHeight = page.offsetHeight;

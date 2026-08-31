@@ -15,7 +15,7 @@
 // Acest PDF poate fi apoi trimis direct din aplicatie (Web Share API) catre
 // WhatsApp sau orice alta aplicatie de pe telefon — vezi shareOrDownloadPdf().
 
-import { blobToDataUrl, shrinkTextToFitOneLine } from './utils.js';
+import { blobToDataUrl, shrinkTextToFitOneLine, shrinkProductsTableToFit, waitForImagesLoaded } from './utils.js';
 
 const A4_PT = { w: 595.28, h: 841.89 }; // 210mm x 297mm, in puncte (1pt = 1/72in)
 
@@ -127,16 +127,30 @@ export async function renderDocPagesToJpegs(html, { scale = 1.6, quality = 0.85 
       page.style.minHeight = '297mm';
       page.style.overflow = 'hidden';
     });
+    // IMPORTANT: inlocuim + asteptam TOATE imaginile (antet, footer, poze,
+    // stampila) inainte de orice masuratoare de inaltime de mai jos. Un
+    // <img> fara width/height explicit (ex. ".doc-header-img") are inaltime
+    // 0 cat timp nu s-a incarcat — daca am masura tabelul de produse inainte
+    // de asta, am crede gresit ca avem mai mult spatiu liber decat vom avea
+    // de fapt dupa ce antetul isi ocupa inaltimea reala, iar randuri intregi
+    // din tabel ar iesi din pagina fara nicio eroare vizibila.
+    await inlineImages(host);
+    await waitForImagesLoaded(host);
     // Textul rosu "va rog sa retrimiteti..." trebuie sa incapa mereu pe UN
     // singur rand (aceeasi logica ca in pdf-print.js openPrintPreview/
     // printDocument) — facut aici separat (nu importat din pdf-print.js) ca
     // sa evitam un import circular (pdf-print.js importa deja din acest
     // fisier).
     host.querySelectorAll('.doc-return-message').forEach((elx) => shrinkTextToFitOneLine(elx));
+    // Daca beneficiarul are multe categorii de produse, tabelul se
+    // micsoreaza (font + padding pe randuri) cat sa incapa TOT pe cele
+    // 297mm fixe de mai sus — altfel randurile care depasesc inaltimea
+    // paginii ar fi taiate silentios de "overflow: hidden" setat mai sus,
+    // fara nicio eroare vizibila (vezi shrinkProductsTableToFit in utils.js).
+    shrinkProductsTableToFit(host);
     const cssText = await getPrintCssText();
     const results = [];
     for (const page of pages) {
-      await inlineImages(page);
       const naturalWidth = page.offsetWidth;
       const naturalHeight = page.offsetHeight;
       results.push(await rasterizePageToJpeg(page, naturalWidth, naturalHeight, cssText, scale, quality));
