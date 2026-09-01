@@ -219,21 +219,57 @@ function hapticTap() {
 // ------------------------------------------------------------------
 // Signature pad (canvas) — ecran complet, folosit prin pushScreen()
 // ------------------------------------------------------------------
-// NU mai folosim Screen Orientation API (screen.orientation.lock) ca sa
-// fortam telefonul pe orizontala — pe multe telefoane/browsere API-ul
-// esueaza silentios in afara modului fullscreen (vezi istoricul acestei
-// functii), asa ca zona de semnat ramanea pe verticala desi soferul tinea
-// telefonul intors, iar semnatura iesea "stramba"/ingusta. In loc sa
-// depindem de asta, rotim NOI ecranul cu CSS (vezi .signature-screen din
-// styles.css) — functioneaza garantat, pe orice telefon/browser,
-// indiferent de starea de instalare. Soferul tot trebuie sa intoarca
-// telefonul fizic ca sa citeasca ecranul corect, dar acum layout-ul e mereu
-// landscape indiferent daca browserul "stie" sau nu ca s-a rotit.
+// Chenarul de semnat ramane ingust/vertical prin CSS (vezi .signature-screen
+// din styles.css) INDIFERENT de orientarea reala a paginii — asta functioneaza
+// garantat, pe orice telefon/browser. Problema gasita ulterior: daca telefonul
+// are "Rotire automata" PORNITA din setarile Android, cand soferul intoarce
+// telefonul fizic, Android roteste si el vizual tot ce se afiseaza (ca sa
+// "compenseze" si continutul sa ramana drept din perspectiva soferului) — iar
+// asta anuleaza trucul din CSS: chenarul, desenat de noi mereu ingust in
+// coordonatele paginii, ajunge sa fie rotit A DOUA OARA de Android, si nu mai
+// arata orizontal cand soferul se uita la el rotit. Solutia: cerem explicit
+// fullscreen + screen.orientation.lock('portrait') cat timp e deschis ecranul
+// de semnat, ca sa oprim Android sa mai roteasca vizual continutul — soferul
+// tot intoarce telefonul fizic, dar acum ecranul NU se mai "auto-compenseaza",
+// exact ca in aplicatia veche (APK, unde orientarea era blocata la nivel de
+// activitate Android). manifest.json seteaza si el "orientation":
+// "portrait-primary" la nivel de WebAPK, dar constatat ca nu e mereu suficient
+// de unul singur pe toate telefoanele — de-aia blocarea explicita de mai jos,
+// ca rezerva. Esueaza silentios acolo unde API-urile lipsesc sau browserul
+// refuza (ex: nu ruleaza ca PWA instalata) — chenarul ramane ingust prin CSS
+// oricum, deci semnatura tot iese corecta daca soferul are "Rotire automata"
+// oprita din telefon.
 export function captureSignature({ title = 'Semnatura' } = {}) {
   return captureSignatureScreen(title);
 }
 
+async function lockPortraitForSignature() {
+  try {
+    if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (e) {}
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('portrait');
+    }
+  } catch (e) {}
+}
+
+function unlockPortraitForSignature() {
+  try {
+    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+  } catch (e) {}
+  try {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } catch (e) {}
+}
+
 function captureSignatureScreen(title) {
+  // Pornit cat mai devreme (sincron, in continuarea gestului de tap al
+  // soferului pe butonul care a deschis acest ecran), ca cererea de
+  // fullscreen sa aiba sanse cat mai mari sa fie acceptata de browser.
+  lockPortraitForSignature();
   // Referinta ridicata in afara builder-ului lui pushScreen(), ca sa putem
   // opri urmarirea dimensiunii canvas-ului cand ecranul se inchide,
   // indiferent cum iese soferul din el (buton, salvare sau Back hardware) —
@@ -480,6 +516,7 @@ function captureSignatureScreen(title) {
   });
   return promise.finally(() => {
     if (resizeObserver) resizeObserver.disconnect();
+    unlockPortraitForSignature();
   });
 }
 
