@@ -2,7 +2,7 @@
 // selectia tipului de proces verbal. Port simplificat din
 // main_selector_screen.dart / home_selection_screen.dart / process_screen.dart.
 
-import { el, formatDateRo, weekdayLabelRo, vechimeLabel, APP_VERSION } from './utils.js';
+import { el, formatDateRo, weekdayLabelRo, vechimeLabel, APP_VERSION, forceUpdateApp } from './utils.js';
 import { pushScreen } from './router.js';
 import { DriverRepo, CarRepo, DepotRepo } from './db.js';
 import { selectField, sectionCard, primaryButton, showToast } from './components.js';
@@ -22,6 +22,19 @@ export async function openMainSelector() {
 
     const logo = el('img', { class: 'brand-logo', src: 'assets/logo/euro_ecologic_logo.png', alt: 'Euro Ecologic' });
     const versionTag = el('div', { class: 'app-version-tag' }, [`Versiune aplicatie: ${APP_VERSION}`]);
+    const updateBtn = el(
+      'button',
+      {
+        class: 'btn btn-text',
+        style: 'display:block;margin:0 auto 4px;font-size:12px;padding:2px 8px;min-height:0',
+        onclick: async () => {
+          updateBtn.disabled = true;
+          updateBtn.textContent = 'Se actualizeaza...';
+          await forceUpdateApp();
+        },
+      },
+      ['⟳ Forteaza actualizarea']
+    );
     const form = el('div', {});
     const infoCard = el('div', { class: 'section-card', style: 'font-size:13px;color:var(--ink-soft)' });
     const continueBtn = primaryButton('Continua', () => {}, { disabled: true });
@@ -109,7 +122,7 @@ export async function openMainSelector() {
       openHomeSelection({ driver: selectedDriver, car: selectedCar, depot: selectedDepot });
     };
 
-    const scroll = el('div', { class: 'screen-scroll' }, [logo, versionTag, form, infoCard]);
+    const scroll = el('div', { class: 'screen-scroll' }, [logo, versionTag, updateBtn, form, infoCard]);
     screen.appendChild(scroll);
     screen.appendChild(el('div', { class: 'bottom-actions' }, [continueBtn]));
     return screen;

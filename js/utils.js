@@ -4,7 +4,34 @@
 // Trebuie tinut manual sincron cu CACHE_VERSION din sw.js la fiecare
 // modificare — afisat pe ecranul de login/acasa ca soferul sa poata
 // confirma dintr-o privire ce versiune ruleaza pe telefon.
-export const APP_VERSION = 'v36';
+export const APP_VERSION = 'v37';
+
+// "Forteaza actualizarea" — echivalentul mobil al Ctrl+Shift+R de pe PC.
+// Pe telefon nu exista alta optiune de hard-refresh, iar un WebAPK Android
+// instalat nu pare sa re-verifice sw.js la fel de des ca un tab obisnuit
+// de Chrome, asa ca soferul poate ramane blocat pe o versiune veche mult
+// timp. Functia asta dezinstaleaza orice service worker inregistrat,
+// sterge tot Cache Storage-ul folosit de el (cache-urile APP_SHELL vechi),
+// apoi reincarca pagina cu un parametru unic in URL ca sa ocolim si
+// cache-ul HTTP obisnuit al browserului — nu doar Cache Storage API. Dupa
+// reload, app.js reinregistreaza automat un service worker nou, curat.
+export async function forceUpdateApp() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((reg) => reg.unregister()));
+    }
+  } catch (e) {}
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+  } catch (e) {}
+  const url = new URL(location.href);
+  url.searchParams.set('_fu', Date.now().toString());
+  location.replace(url.toString());
+}
 
 const DIACRITICS_MAP = {
   'ă': 'a', 'â': 'a', 'î': 'i', 'ș': 's', 'ş': 's', 'ț': 't', 'ţ': 't',

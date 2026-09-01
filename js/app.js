@@ -41,7 +41,27 @@ async function boot() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker
+      .register('sw.js')
+      .then((reg) => {
+        // Cerem activ o verificare de versiune noua la fiecare pornire —
+        // un WebAPK Android instalat nu pare sa re-verifice sw.js la fel
+        // de des ca un tab obisnuit de Chrome, asa ca soferul putea ramane
+        // blocat pe o versiune veche mult timp fara asta.
+        reg.update().catch(() => {});
+      })
+      .catch(() => {});
+    // Cand un service worker nou preia controlul (dupa skipWaiting() +
+    // clients.claim() din sw.js), pagina curenta ruleaza in continuare cu
+    // codul vechi deja incarcat in memorie. Reincarcam o singura data ca sa
+    // preluam automat tot codul nou, fara sa mai fie nevoie ca soferul sa
+    // apese manual pe "Forteaza actualizarea" (utils.js) de fiecare data.
+    let reloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloadedForUpdate) return;
+      reloadedForUpdate = true;
+      location.reload();
+    });
   });
 }
 
