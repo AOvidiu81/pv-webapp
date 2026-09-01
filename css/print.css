@@ -37,7 +37,7 @@
 
 .doc-header { margin-bottom: 5mm; }
 .doc-header-img { width: 100%; max-height: 20mm; object-fit: contain; display: block; }
-.doc-header-rule { height: 0.9pt; background: var(--doc-blue); margin-top: 2mm; }
+.doc-header-rule { height: 1.4pt; background: var(--doc-blue); margin-top: 2mm; }
 
 .doc-preview-badge {
   position: absolute;
@@ -162,7 +162,7 @@
 .doc-parties-table td.right { text-align: right; }
 
 .doc-footer { margin-top: 3mm; }
-.doc-footer-rule { height: 0.9pt; background: var(--doc-red); margin-bottom: 1.6mm; }
+.doc-footer-rule { height: 1.4pt; background: var(--doc-red); margin-bottom: 1.6mm; }
 .doc-footer-row { display: flex; align-items: center; gap: 2.5mm; }
 .doc-footer-logo { width: 20mm; height: 9mm; object-fit: contain; }
 .doc-footer-sep { width: 0.5pt; height: 9mm; background: #99a3b3; }

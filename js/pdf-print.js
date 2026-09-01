@@ -585,20 +585,36 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     const saveBtn = el('button', { class: 'btn btn-outline', style: 'flex:1', disabled: true }, ['⏳  Se pregateste PDF-ul...']);
     const sendBtn = el('button', { class: 'btn btn-outline', style: 'flex:1', disabled: true }, ['⏳  Se pregateste PDF-ul...']);
     const sendBtnLabel = '📤  Trimite';
-    let pdfReady = false;
+    // IMPORTANT — cauza reala a "NotAllowedError: Permission denied": nu
+    // conta doar CA blob-ul era deja gata la click (pdfReady), ci si faptul
+    // ca handler-ul facea in continuare "await getPdfBlob()" inainte de
+    // share() — un "await" pe o promisiune deja rezolvata tot introduce un
+    // microtask intre gestul de tap si apelul efectiv navigator.share(), iar
+    // pe unele WebView-uri Android acel singur microtask e suficient ca sa
+    // piarda "user activation". Fix real: pastram blob-ul GATA intr-o
+    // variabila simpla (readyBlob), nu doar un boolean — click-ul foloseste
+    // acea variabila DIRECT, sincron, fara niciun await inainte de a apela
+    // shareOrDownloadPdf() (care la randul ei ajunge sincron pana la
+    // navigator.share() — vezi pdf-generate.js). Asa, share() porneste in
+    // acelasi tick de JS ca gestul de tap, cu zero intarziere intre ele.
+    let readyBlob = null;
+    let readyError = null;
+    let settled = false;
     getPdfBlob()
-      .then(() => {
-        pdfReady = true;
+      .then((blob) => {
+        readyBlob = blob;
+        settled = true;
         saveBtn.textContent = '💾  Salveaza PDF';
         saveBtn.disabled = false;
         sendBtn.textContent = sendBtnLabel;
         sendBtn.disabled = false;
       })
-      .catch(() => {
+      .catch((e) => {
         // Lasam butoanele activate chiar daca generarea eager a esuat —
-        // click-ul insusi va incerca din nou (si va arata eroarea reala prin
-        // catch-ul de mai jos) in loc sa blocheze soferul definitiv.
-        pdfReady = true;
+        // click-ul insusi va arata eroarea reala (readyError) in loc sa
+        // blocheze soferul definitiv.
+        readyError = e;
+        settled = true;
         saveBtn.textContent = '💾  Salveaza PDF';
         saveBtn.disabled = false;
         sendBtn.textContent = sendBtnLabel;
@@ -606,25 +622,28 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
       });
 
     let saveBusy = false;
-    saveBtn.addEventListener('click', async () => {
-      if (saveBusy || !pdfReady) return;
+    saveBtn.addEventListener('click', () => {
+      if (saveBusy || !settled) return;
+      if (readyError) {
+        showToast('Nu am putut genera PDF-ul: ' + readyError.message, { danger: true });
+        return;
+      }
       saveBusy = true;
       const originalLabel = saveBtn.textContent;
-      saveBtn.textContent = 'Se pregateste...';
+      saveBtn.textContent = 'Se salveaza...';
       saveBtn.disabled = true;
       try {
-        const blob = await getPdfBlob();
         // Descarcare DIRECTA (nu prin meniul de distribuire) — cea mai
         // sigura metoda sa garantam numele exact al fisierului salvat
         // ("PVA - CLIENT - ADRESA - DATA.pdf"). Meniul de distribuire al
         // Android poate, la unele combinatii telefon/aplicatie (ex:
         // "Salveaza in Fisiere"), sa ignore numele nostru si sa puna unul
         // generat de sistem — de-asta NU trecem prin el aici.
-        const safeName = downloadPdf(blob, fileNameBase);
+        const safeName = downloadPdf(readyBlob, fileNameBase);
         showToast(`PDF salvat in Descarcari: ${safeName}`);
       } catch (e) {
         console.error(e);
-        showToast('Nu am putut genera PDF-ul: ' + e.message, { danger: true });
+        showToast('Nu am putut salva PDF-ul: ' + e.message, { danger: true });
       } finally {
         saveBusy = false;
         saveBtn.textContent = originalLabel;
@@ -634,17 +653,22 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
 
     let sendBusy = false;
     sendBtn.addEventListener('click', async () => {
-      if (sendBusy || !pdfReady) return;
+      if (sendBusy || !settled) return;
+      if (readyError) {
+        showToast('Nu am putut genera PDF-ul: ' + readyError.message, { danger: true });
+        return;
+      }
       sendBusy = true;
       const originalLabel = sendBtn.textContent;
-      sendBtn.textContent = 'Se pregateste...';
+      sendBtn.textContent = 'Se trimite...';
       sendBtn.disabled = true;
       try {
-        const blob = await getPdfBlob();
-        // Aici mergem pe meniul nativ de distribuire (WhatsApp, Email etc.)
-        // — util pentru trimitere rapida catre alta aplicatie; daca telefonul
-        // nu suporta distribuirea, descarcam fisierul ca rezerva.
-        const result = await shareOrDownloadPdf(blob, fileNameBase, { title: fileNameBase });
+        // Niciun await inainte de linia de mai jos — vezi comentariul de la
+        // declararea lui readyBlob. Aici mergem pe meniul nativ de
+        // distribuire (WhatsApp, Email etc.) — util pentru trimitere rapida
+        // catre alta aplicatie; daca telefonul nu suporta distribuirea,
+        // descarcam fisierul ca rezerva.
+        const result = await shareOrDownloadPdf(readyBlob, fileNameBase, { title: fileNameBase });
         if (result.status === 'downloaded') {
           // Includem motivul exact (vezi shareOrDownloadPdf) direct in toast —
           // fara acces la depanare USB / chrome://inspect pe telefonul
@@ -654,7 +678,7 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
         }
       } catch (e) {
         console.error(e);
-        showToast('Nu am putut genera PDF-ul: ' + e.message, { danger: true });
+        showToast('Nu am putut trimite PDF-ul: ' + e.message, { danger: true });
       } finally {
         sendBusy = false;
         sendBtn.textContent = originalLabel;

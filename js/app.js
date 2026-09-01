@@ -8,6 +8,21 @@ import { runSetupWizard } from './screens-setup.js';
 import { openMainSelector } from './screens-home.js';
 import { runLoginGate } from './screens-login.js';
 
+// Incercam sa blocam orientarea pe portret cat mai devreme posibil, in
+// completarea "orientation" din manifest.json (care se aplica abia dupa ce
+// Chrome regenereaza in fundal WebAPK-ul deja instalat pe telefon — poate
+// dura si sa nu se intample instant dupa un update). Blocarea prin JS are
+// efect imediat pe telefoanele unde e suportata. Ecranul de semnatura
+// (captureSignatureScreen din components.js) NU depinde totusi de reusita
+// acestui apel — chenarul ramane ingust/vertical prin CSS (vmin/vmax)
+// indiferent de orientare, iar la salvare rotim intotdeauna neconditionat —
+// asta e doar un bonus care evita reflow-ul intregii pagini cand soferul
+// intoarce telefonul. Esueaza silentios acolo unde API-ul lipseste sau
+// contextul nu permite blocarea (ex: nu ruleaza ca PWA instalata).
+if (screen.orientation && screen.orientation.lock) {
+  screen.orientation.lock('portrait').catch(() => {});
+}
+
 async function boot() {
   // Poarta de login: blocheaza pana la autentificare + (la prima utilizare)
   // setarea semnaturii. Sincronizeaza si profilul/masinile/produsele din
