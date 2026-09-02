@@ -173,6 +173,23 @@ export function selectField({ label, value, options, onChange }) {
   return wrapper;
 }
 
+// Tila mare (icon + label + subtitlu + sageata), folosita in selectorul de
+// module de pe ecranul principal (Procese Verbale / Cereri Documente) si in
+// meniul Cereri/Documente (Concediu/Invoire/Demisie) — o singura definitie,
+// refolosita din ambele fisiere de ecrane, ca sa nu existe un import
+// circular intre screens-home.js si screens-cereri.js.
+export function tile({ label, sub, icon, accent, badge, onClick, disabled }) {
+  return el(
+    'button',
+    { class: 'tile', style: disabled ? 'opacity:0.55' : '', onclick: disabled ? () => showToast('Disponibil intr-o versiune viitoare.') : onClick },
+    [
+      el('div', { class: 'tile-icon', style: `background:${badge};color:${accent}` }, [icon]),
+      el('div', { style: 'flex:1' }, [el('div', { class: 'tile-label' }, [label]), sub ? el('div', { class: 'tile-sub' }, [sub]) : null]),
+      el('div', { class: 'tile-chevron', style: `color:${accent}` }, ['›']),
+    ]
+  );
+}
+
 export function sectionCard(titleText, children = []) {
   const card = el('div', { class: 'section-card' });
   if (titleText) card.appendChild(el('h3', { class: 'section-title' }, [titleText]));

@@ -4,7 +4,7 @@
 // Trebuie tinut manual sincron cu CACHE_VERSION din sw.js la fiecare
 // modificare — afisat pe ecranul de login/acasa ca soferul sa poata
 // confirma dintr-o privire ce versiune ruleaza pe telefon.
-export const APP_VERSION = 'v38';
+export const APP_VERSION = 'v39';
 
 // "Forteaza actualizarea" — echivalentul mobil al Ctrl+Shift+R de pe PC.
 // Pe telefon nu exista alta optiune de hard-refresh, iar un WebAPK Android
@@ -346,6 +346,64 @@ export function blobToDataUrl(blob) {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+}
+
+// ------------------------------------------------------------------
+// Zile lucratoare (Luni-Vineri) — folosite de modulul Cereri/Documente
+// (Cerere de Concediu, Cerere de Demisie cu preaviz), la fel ca in
+// aplicatia veche (APK).
+// ------------------------------------------------------------------
+
+/** Numara zilele lucratoare (Luni-Vineri) intre doua date, INCLUSIV ambele
+ * capete — ex: Miercuri -> Marti saptamana urmatoare = 5 zile lucratoare. */
+export function countBusinessDaysInclusive(startDate, endDate) {
+  if (!(startDate instanceof Date) || isNaN(startDate) || !(endDate instanceof Date) || isNaN(endDate)) return 0;
+  const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  if (end < start) return 0;
+  let count = 0;
+  const cur = new Date(start);
+  while (cur <= end) {
+    const day = cur.getDay(); // 0=Duminica, 6=Sambata
+    if (day !== 0 && day !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+/** Adauga N zile lucratoare (Luni-Vineri) la o data, fara sa numere ziua de
+ * start — folosita ca valoare implicita pentru "Data incetare" la Cererea de
+ * Demisie cu preaviz (Caz 2); soferul poate oricand ajusta manual data
+ * rezultata inainte de generarea documentului. */
+export function addBusinessDays(startDate, n) {
+  if (!(startDate instanceof Date) || isNaN(startDate)) return startDate;
+  const cur = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  let remaining = n;
+  while (remaining > 0) {
+    cur.setDate(cur.getDate() + 1);
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) remaining--;
+  }
+  return cur;
+}
+
+/** "2026-09-02" (valoarea unui <input type="date">) -> Date local, la miezul
+ * noptii — evita problemele de fus orar ale lui `new Date("2026-09-02")`
+ * (interpretat ca UTC de motoarele JS, ceea ce poate "aluneca" o zi in urma
+ * in fusele estice ale Romaniei in anumite conditii). Intoarce null daca
+ * sirul lipseste sau e invalid. */
+export function parseIsoDate(str) {
+  if (!str) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
+  if (!m) return null;
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(date) ? null : date;
+}
+
+/** Date -> "2026-09-02", pentru valoarea unui <input type="date">. */
+export function toIsoDate(date) {
+  if (!(date instanceof Date) || isNaN(date)) return '';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
 export function dataUrlToBlob(dataUrl) {

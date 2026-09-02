@@ -28,7 +28,7 @@ import { generateDocumentPdfBlob, downloadPdf, shareOrDownloadPdf } from './pdf-
 
 const NA = 'N/A';
 
-function esc(value) {
+export function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
@@ -134,7 +134,10 @@ function docDateTime(iso) {
   };
 }
 
-function runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal) {
+// Exportata si folosita de pdf-cereri.js (Cereri/Documente: Concediu, Invoire,
+// Demisie) — acelasi footer, identic vizual cu cel de pe Procesul Verbal, ca
+// toate documentele generate de aplicatie sa ramana consistente.
+export function runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal) {
   const pageLabel = pageIndex && pageTotal ? `<div class="doc-footer-sep"></div><div class="doc-footer-page">Pagina ${pageIndex} din ${pageTotal}</div>` : '';
   return `
     <div class="doc-footer">

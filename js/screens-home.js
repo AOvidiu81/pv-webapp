@@ -5,11 +5,12 @@
 import { el, formatDateRo, weekdayLabelRo, vechimeLabel, APP_VERSION, forceUpdateApp } from './utils.js';
 import { pushScreen } from './router.js';
 import { DriverRepo, CarRepo, DepotRepo } from './db.js';
-import { selectField, sectionCard, primaryButton, showToast } from './components.js';
+import { selectField, sectionCard, primaryButton, showToast, tile } from './components.js';
 import { openSettingsScreen } from './screens-setup.js';
 import { PROCESS_TYPES, COMPANY_INFO } from './catalog-defaults.js';
 import { openProcessVerbalForm } from './screens-pv-form.js';
 import { openHistoryScreen } from './screens-history.js';
+import { openCereriMenu } from './screens-cereri.js';
 
 export async function openMainSelector() {
   return pushScreen(({ pop }) => {
@@ -129,18 +130,6 @@ export async function openMainSelector() {
   });
 }
 
-function tile({ label, sub, icon, accent, badge, onClick, disabled }) {
-  const t = el(
-    'button',
-    { class: 'tile', style: disabled ? 'opacity:0.55' : '', onclick: disabled ? () => showToast('Disponibil intr-o versiune viitoare.') : onClick },
-    [
-      el('div', { class: 'tile-icon', style: `background:${badge};color:${accent}` }, [icon]),
-      el('div', { style: 'flex:1' }, [el('div', { class: 'tile-label' }, [label]), sub ? el('div', { class: 'tile-sub' }, [sub]) : null]),
-      el('div', { class: 'tile-chevron', style: `color:${accent}` }, ['›']),
-    ]
-  );
-  return t;
-}
 
 async function openHomeSelection({ driver, car, depot }) {
   return pushScreen(({ pop }) => {
@@ -200,11 +189,11 @@ async function openHomeSelection({ driver, car, depot }) {
       }),
       tile({
         label: 'CERERI / DOCUMENTE',
-        sub: 'Concediu, demisie, invoire (in curand)',
+        sub: 'Concediu, demisie, invoire',
         icon: '📁',
         accent: '#2D4D7A',
         badge: '#EEF3FA',
-        disabled: true,
+        onClick: () => openCereriMenu({ driver, car, depot }),
       }),
     ]);
 

@@ -261,6 +261,31 @@
 .doc-annex-placeholder { text-align: center; font-family: Arial, sans-serif; font-size: 9.5pt; padding: 8mm; }
 .doc-annex-placeholder div + div { margin-top: 2mm; font-weight: 400; color: var(--doc-muted); }
 
+/* ---- Cereri / Documente (Concediu, Invoire, Demisie) ---- */
+.doc-cerere-body { margin-top: 6mm; font-size: 10.2pt; line-height: 1.62; text-align: justify; }
+.doc-cerere-body + .doc-cerere-body { margin-top: 3.5mm; }
+.doc-cerere-legal-note { margin-top: 4mm; font-size: 8.4pt; color: var(--doc-muted); }
+.doc-cerere-mentiuni { margin-top: 4mm; }
+.doc-cerere-spacer { flex: 1 1 auto; min-height: 16mm; }
+
+.doc-cerere-sign-row { align-items: flex-end; }
+.doc-cerere-date-col div + div { margin-top: 1mm; }
+.doc-cerere-solicitant-col { text-align: right; }
+.doc-cerere-solicitant-slot { height: 15mm; display: flex; align-items: flex-end; justify-content: flex-end; }
+.doc-cerere-solicitant-slot img { max-height: 15mm; max-width: 60mm; object-fit: contain; }
+.doc-cerere-solicitant-caption {
+  font-size: 8pt;
+  color: var(--doc-muted);
+  border-top: 0.6pt solid var(--doc-border-strong);
+  padding-top: 1mm;
+  margin-top: 1mm;
+}
+
+.doc-cerere-approval { min-height: 20mm; }
+.doc-cerere-approval-spacer { height: 9mm; }
+.doc-cerere-line { border-bottom: 0.6pt solid #97a4b8; height: 9mm; margin-top: 1.5mm; }
+.doc-cerere-caption { font-size: 8pt; color: var(--doc-muted); margin-top: 1mm; }
+
 @media print {
   @page { size: A4; margin: 0; }
   html, body { margin: 0 !important; }

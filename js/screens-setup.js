@@ -124,7 +124,23 @@ async function openDepotEditor(existing) {
     const repFunctionField = textField({ label: 'Functie reprezentant', value: base.representativeFunction || '' });
     const repPhoneField = textField({ label: 'Telefon depozit', value: base.representativePhone || '' });
     const repEmailField = textField({ label: 'Email depozit', value: base.representativeEmail || '' });
-    const card = sectionCard('Date depozit', [nameField, addressField, repNameField, repFunctionField, repPhoneField, repEmailField]);
+    const accessCodeField = textField({
+      label: 'Parola acces — Cerere de Demisie (optional)',
+      value: base.representativeAccessCode || '',
+      placeholder: 'lasa gol = fara verificare parola',
+    });
+    const card = sectionCard('Date depozit', [
+      nameField,
+      addressField,
+      repNameField,
+      repFunctionField,
+      repPhoneField,
+      repEmailField,
+      accessCodeField,
+      el('div', { style: 'font-size:12px;color:var(--ink-soft);margin-top:-4px' }, [
+        'Aceasta parola e ceruta soferului inainte de a genera o Cerere de Demisie, ca reprezentantul depozitului sa fie de fata la solicitare.',
+      ]),
+    ]);
     const scroll = el('div', { class: 'screen-scroll' }, [card]);
     const bottom = el('div', { class: 'bottom-actions' }, [
       primaryButton('Salveaza depozit', async () => {
@@ -141,6 +157,7 @@ async function openDepotEditor(existing) {
           representativeFunction: repFunctionField.input.value.trim(),
           representativePhone: repPhoneField.input.value.trim(),
           representativeEmail: repEmailField.input.value.trim(),
+          representativeAccessCode: accessCodeField.input.value.trim(),
           sortOrder: existing?.sortOrder ?? Date.now(),
         };
         const id = await DepotRepo.save(record);

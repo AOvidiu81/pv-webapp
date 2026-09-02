@@ -31,6 +31,9 @@ export const DEFAULT_DEPOT = {
   representativeFunction: 'Sales Manager',
   representativePhone: '0735 214 762',
   representativeEmail: 'hunedoara@eurowc.ro',
+  // Parola de acces pentru "Cerere de Demisie" (vezi js/screens-cereri.js) —
+  // goala implicit; se configureaza din Setari > Depozit.
+  representativeAccessCode: '',
   sortOrder: 0,
 };
 
