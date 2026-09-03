@@ -251,12 +251,25 @@ export async function uploadPvRecordToCloud(meta, blob) {
     // renuntam silentios, PV-ul ramane oricum salvat local.
     if (!session) return;
     const storagePath = `${session.user.id}/${meta.id}.pdf`;
+    // FARA upsert: fiecare PV are un id (uuid) nou la fiecare salvare, deci
+    // nu exista niciodata un conflict real de nume — iar upsert:true ar
+    // genera un INSERT ... ON CONFLICT DO UPDATE, care cere Postgres sa
+    // verifice si o politica RLS de UPDATE (nu doar INSERT) chiar daca
+    // conflictul nu se produce niciodata efectiv. Cum am definit doar
+    // politica de INSERT pentru folderul propriu al soferului, upsert:true
+    // pica mereu cu "new row violates row-level security policy" — un simplu
+    // INSERT (fara upsert) foloseste doar politica de INSERT si functioneaza.
     const { error: uploadErr } = await supabase.storage.from('pv-documents').upload(storagePath, blob, {
       contentType: 'application/pdf',
-      upsert: true,
     });
-    if (uploadErr) return;
-    await supabase.from('pv_records').insert({
+    if (uploadErr) {
+      // console.warn, nu o eroare aratata soferului -- PV-ul local ramane
+      // neschimbat. Util insa de vazut in consola telefonului/desktopului
+      // daca cineva investigheaza de ce un PV nu a ajuns in admin.
+      console.warn('[pv-sync] incarcare PDF esuata:', uploadErr.message || uploadErr);
+      return;
+    }
+    const { error: insertErr } = await supabase.from('pv_records').insert({
       id: meta.id,
       driver_id: session.user.id,
       driver_name: meta.driverName,
@@ -269,8 +282,12 @@ export async function uploadPvRecordToCloud(meta, blob) {
       file_size: blob.size,
       storage_path: storagePath,
     });
+    if (insertErr) {
+      console.warn('[pv-sync] salvare rand pv_records esuata:', insertErr.message || insertErr);
+    }
   } catch (e) {
     // best-effort — vezi comentariul de mai sus
+    console.warn('[pv-sync] sincronizare PV esuata:', e?.message || e);
   }
 }
 
