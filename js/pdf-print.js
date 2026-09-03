@@ -243,6 +243,7 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
       <div class="doc-box">
         <div>Punct de lucru: <strong>${esc((model.depotName || '').toUpperCase())}</strong></div>
         <div>Nume Sofer: <strong>${esc(shortDriverName(model.userName))}</strong></div>
+        ${model.userFunctie ? `<div>Functie: <strong>${esc(model.userFunctie)}</strong></div>` : ''}
         <div>Numar Masina: <strong>${esc((model.carNumar || '').toUpperCase())}</strong></div>
       </div>
     </div>

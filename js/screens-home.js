@@ -51,6 +51,9 @@ export async function openMainSelector() {
       const today = new Date();
       infoCard.innerHTML = '';
       infoCard.appendChild(el('div', { style: 'margin-bottom:4px' }, [`CI: ${selectedDriver?.ci || '-'}`]));
+      if (selectedDriver?.functia) {
+        infoCard.appendChild(el('div', { style: 'margin-bottom:4px' }, [`Functie: ${selectedDriver.functia}`]));
+      }
       if (selectedDriver?.nrContract) {
         infoCard.appendChild(el('div', { style: 'margin-bottom:4px' }, [`Nr. contract: ${selectedDriver.nrContract}`]));
       }

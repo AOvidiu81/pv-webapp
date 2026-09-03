@@ -3,10 +3,29 @@
 // apoi deschide ecranul principal. Inregistreaza si service worker-ul
 // pentru functionare offline / instalare ca PWA.
 
+import { el } from './utils.js';
 import { DriverRepo, CarRepo, DepotRepo } from './db.js';
 import { runSetupWizard } from './screens-setup.js';
 import { openMainSelector } from './screens-home.js';
 import { runLoginGate } from './screens-login.js';
+import { getTodayBirthdays } from './auth.js';
+import { openModal } from './components.js';
+
+// Mesaj general de zi de nastere: NU e legat de soferul logat momentan —
+// arata numele oricarui sofer activ a carui zi e chiar azi (data nasterii se
+// seteaza doar din panoul de admin), vazut de ORICINE deschide aplicatia in
+// acea zi. Fire-and-forget: nu blocheaza pornirea aplicatiei, iar fara
+// internet getTodayBirthdays() intoarce pur si simplu o lista goala.
+async function checkBirthdays() {
+  const names = await getTodayBirthdays();
+  if (!names.length) return;
+  const message = names.length === 1 ? `La multi ani, ${names[0]}! 🎉` : `La multi ani, ${names.join(' si ')}! 🎉`;
+  await openModal({
+    title: '🎂 Zi de nastere',
+    bodyNode: el('div', { style: 'text-align:center;font-size:16px;font-weight:700;padding:6px 0' }, [message]),
+    actions: [{ label: 'Multumesc!', value: true, primary: true }],
+  });
+}
 
 // Incercam sa blocam orientarea pe portret cat mai devreme posibil, in
 // completarea "orientation" din manifest.json (care se aplica abia dupa ce
@@ -29,6 +48,9 @@ async function boot() {
   // panoul de admin in baza de date locala, ca restul aplicatiei sa
   // functioneze neschimbat, inclusiv offline.
   await runLoginGate();
+
+  // Nu asteptam acest apel — vezi comentariul de la checkBirthdays().
+  checkBirthdays();
 
   const [drivers, cars, depots] = await Promise.all([DriverRepo.getAll(), CarRepo.getAll(), DepotRepo.getAll()]);
   if (!drivers.length || !cars.length || !depots.length) {

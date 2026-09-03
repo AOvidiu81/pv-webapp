@@ -28,9 +28,11 @@ async function openDriverEditor(existing) {
     let signatureBlob = null;
     let signatureDataUrl = existing?.signatureDataUrl || null;
 
+    const isSyncedDriver = existing?.id === 'synced-driver';
+
     const nameField = textField({ label: 'Nume complet', value: existing?.name || '', required: true });
     const ciField = textField({ label: 'CI (serie + numar)', value: existing?.ci || '' });
-    const functiaField = textField({ label: 'Functie (optional)', value: existing?.functia || '' });
+    const functiaField = textField({ label: 'Functie (optional)', value: existing?.functia || '', readOnly: isSyncedDriver });
 
     const sigPreview = el('div', { class: 'signature-box-preview' });
     function renderSigPreview() {
@@ -51,7 +53,18 @@ async function openDriverEditor(existing) {
       renderSigPreview();
     });
 
-    const card = sectionCard('Date sofer', [nameField, ciField, functiaField, el('div', { class: 'field-label' }, ['Semnatura']), sigPreview, el('div', { style: 'height:8px' }), sigBtn]);
+    const card = sectionCard('Date sofer', [
+      nameField,
+      ciField,
+      functiaField,
+      isSyncedDriver
+        ? el('div', { style: 'font-size:12px;color:var(--ink-soft);margin-top:-8px' }, ['Functia e gestionata de administrator si se actualizeaza automat la login.'])
+        : null,
+      el('div', { class: 'field-label' }, ['Semnatura']),
+      sigPreview,
+      el('div', { style: 'height:8px' }),
+      sigBtn,
+    ]);
 
     const scroll = el('div', { class: 'screen-scroll' }, [card]);
     const bottom = el('div', { class: 'bottom-actions' }, [

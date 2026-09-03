@@ -355,10 +355,16 @@ async function editDriver(row) {
       <div class="field"><label>CI — numar</label><input id="m-ci-numar" value="${esc(row.ci_numar || '')}" placeholder="ex: 123456" /></div>
       <div class="field"><label>Numar contract</label><input id="m-contract" value="${esc(row.nr_contract || '')}" /></div>
       <div class="field"><label>Data angajarii</label><input id="m-angajare" type="text" inputmode="numeric" maxlength="10" placeholder="ZZ-LL-AAAA" value="${esc(isoToDmy(row.data_angajare))}" /></div>
+      <div class="field"><label>Functie</label><input id="m-functie" value="${esc(row.functie || '')}" placeholder="ex: Agent Vanzari" /></div>
+      <div class="field"><label>Data nasterii</label><input id="m-nastere" type="text" inputmode="numeric" maxlength="10" placeholder="ZZ-LL-AAAA" value="${esc(isoToDmy(row.data_nasterii))}" /></div>
+      <div class="hint-text">Functia apare pe Procesele Verbale si pe Cererile generate de sofer. La ziua de nastere, oricine deschide aplicatia soferilor in acea zi vede un mesaj general de felicitare.</div>
       <div class="hint-text">Schimbarea numelui de utilizator schimba si datele de login ale soferului — anunta-l inainte.</div>
       <div class="error-text" id="m-error"></div>
     `,
-    onMount: (backdrop) => attachDmyAutoformat(backdrop.querySelector('#m-angajare')),
+    onMount: (backdrop) => {
+      attachDmyAutoformat(backdrop.querySelector('#m-angajare'));
+      attachDmyAutoformat(backdrop.querySelector('#m-nastere'));
+    },
     actions: [
       { label: 'Anuleaza', className: 'btn-outline' },
       {
@@ -370,6 +376,7 @@ async function editDriver(row) {
           const ci_serie = backdrop.querySelector('#m-ci-serie').value.trim();
           const ci_numar = backdrop.querySelector('#m-ci-numar').value.trim();
           const nr_contract = backdrop.querySelector('#m-contract').value.trim();
+          const functie = backdrop.querySelector('#m-functie').value.trim();
           const errEl = backdrop.querySelector('#m-error');
           if (!username || !full_name) {
             errEl.textContent = 'Utilizatorul si numele nu pot fi goale.';
@@ -378,6 +385,11 @@ async function editDriver(row) {
           const angajareResult = dmyToIso(backdrop.querySelector('#m-angajare').value);
           if (angajareResult.error) {
             errEl.textContent = angajareResult.error;
+            return false;
+          }
+          const nastereResult = dmyToIso(backdrop.querySelector('#m-nastere').value);
+          if (nastereResult.error) {
+            errEl.textContent = nastereResult.error;
             return false;
           }
           try {
@@ -390,6 +402,8 @@ async function editDriver(row) {
               ci_numar,
               nr_contract,
               data_angajare: angajareResult.value,
+              functie,
+              data_nasterii: nastereResult.value,
             });
             showToast('Sofer actualizat.');
             loadDrivers();

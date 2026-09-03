@@ -577,6 +577,7 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         processType,
         userName: driver.name,
         userCi: driver.ci,
+        userFunctie: driver.functia,
         carMarca: car.marca,
         carNumar: car.numar,
         depotName: depot.name,

@@ -210,6 +210,25 @@ export async function saveOwnSignature(dataUrl) {
   return profile;
 }
 
+/** Numele soferilor activi a caror zi de nastere e chiar azi (fus orar RO),
+ * indiferent cine e logat — folosit pentru mesajul general "La multi ani"
+ * aratat oricui deschide aplicatia in acea zi (vezi app.js). RPC SECURITY
+ * DEFINER (la fel ca listDriversForLogin), pentru ca RLS pe profiles
+ * limiteaza altfel fiecare cont sa vada doar randul propriu. Best-effort:
+ * fara internet, intoarce pur si simplu lista goala (nu blocheaza pornirea
+ * aplicatiei si nu arata eroare — nu e o functionalitate esentiala).
+ */
+export async function getTodayBirthdays() {
+  try {
+    const supabase = await getSupabase();
+    const { data, error } = await supabase.rpc('list_today_birthdays');
+    if (error || !data) return [];
+    return data.map((r) => r.full_name).filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
+
 /** Sincronizeaza profilul propriu (ca "sofer" local) si flota de masini /
  * catalogul de produse active in IndexedDB, ca ecranele existente (care
  * citesc DriverRepo/CarRepo/CatalogRepo local) sa functioneze neschimbate.
@@ -222,7 +241,10 @@ export async function syncMasterData(profile) {
       id: LOCAL_DRIVER_KEY,
       name: profile.full_name,
       ci,
-      functia: '',
+      // Functia e acum gestionata de admin (panoul separat) si sincronizata
+      // de aici — nu mai e un camp liber local (vezi si openDriverEditor din
+      // screens-setup.js). Foloseste "profile.functie", nu "" ca inainte.
+      functia: profile.functie || '',
       signatureDataUrl: profile.signature_url || '',
       nrContract: profile.nr_contract || '',
       dataAngajare: profile.data_angajare || '',
