@@ -1,7 +1,7 @@
 // components.js — elemente UI reutilizabile: toast, modal de confirmare,
 // bottom-sheet de selectie, camp de text, semnatura pe canvas, poarta GPS.
 
-import { el } from './utils.js';
+import { el, parseIsoDate, toIsoDate } from './utils.js';
 import { pushScreen } from './router.js';
 
 // ------------------------------------------------------------------
@@ -144,6 +144,259 @@ export function textField({ label, value = '', required = false, type = 'text', 
   wrapper.appendChild(input);
   if (errorText) wrapper.appendChild(el('div', { class: 'field-error' }, [errorText]));
   wrapper.input = input;
+  return wrapper;
+}
+
+// ------------------------------------------------------------------
+// Camp de data (ZZ-LL-AAAA + mini-calendar propriu, Luni prima zi)
+// ------------------------------------------------------------------
+// Inlocuieste <input type="date">: pe telefon/Chrome-Windows, formatul si
+// prima zi a saptamanii din calendarul nativ sunt impuse de regiunea
+// telefonului (des. mm/dd/yyyy si Duminica prima), nu pot fi fortate din
+// HTML — vezi si comentariul din admin/admin.js unde s-a rezolvat la fel.
+// Soferul poate fie sa tasteze (cratimele se adauga automat, ca in admin),
+// fie sa apese iconita de calendar pentru propriul mini-calendar, mereu
+// ZZ-LL-AAAA si mereu cu saptamana Luni->Duminica.
+//
+// Contractul extern ramane IDENTIC cu vechiul <input type="date">, ca tot
+// codul din screens-cereri.js sa functioneze neschimbat: `field.input.value`
+// citeste/scrie mereu ISO "AAAA-LL-ZZ", iar `field.input.addEventListener
+// ('change', ...)` se declanseaza cand soferul alege/confirma o data noua
+// (din calendar sau prin tastare + Enter/blur). `field.input` NU mai e un
+// <input> DOM real (e un EventTarget cu .value suprascris), dar niciun cod
+// din aplicatie nu ii foloseste alte proprietati.
+const RO_WEEKDAYS_SHORT = ['Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sa', 'Du'];
+const RO_MONTHS_FULL = [
+  'Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
+  'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie',
+];
+
+function isoToDmyDisplay(iso) {
+  if (!iso) return '';
+  const [y, m, d] = String(iso).split('-');
+  if (!y || !m || !d) return '';
+  return `${d}-${m}-${y}`;
+}
+
+function dmyToIsoValue(dmy) {
+  const clean = String(dmy || '').trim();
+  const match = clean.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (!match) return null;
+  const [, dStr, mStr, yStr] = match;
+  const d = Number(dStr);
+  const m = Number(mStr);
+  const y = Number(yStr);
+  const check = new Date(y, m - 1, d);
+  if (check.getFullYear() !== y || check.getMonth() !== m - 1 || check.getDate() !== d) return null;
+  return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+export function dateField({ label, value = '', required = false, onInput }) {
+  const wrapper = el('div', { class: 'field' });
+  if (label) wrapper.appendChild(el('label', { class: 'field-label' }, [label + (required ? ' *' : '')]));
+
+  const textInput = el('input', {
+    class: 'field-input date-field-input',
+    type: 'text',
+    inputmode: 'numeric',
+    maxlength: '10',
+    placeholder: 'ZZ-LL-AAAA',
+  });
+  const calBtn = el('button', { type: 'button', class: 'date-field-btn', 'aria-label': 'Alege data din calendar' }, ['📅']);
+  const row = el('div', { class: 'date-field-row' }, [textInput, calBtn]);
+  wrapper.appendChild(row);
+
+  // Proxy: singurul "input" pe care il vede codul extern. .value citeste/
+  // scrie mereu ISO; setarea lui (din afara) NU declanseaza 'change' —
+  // exact ca setarea programatica a lui .value pe un <input> nativ.
+  const proxy = new EventTarget();
+  let isoVal = '';
+  Object.defineProperty(proxy, 'value', {
+    get: () => isoVal,
+    set: (v) => {
+      isoVal = v || '';
+      textInput.value = isoToDmyDisplay(isoVal);
+    },
+  });
+
+  function commit(newIso) {
+    isoVal = newIso || '';
+    textInput.value = isoToDmyDisplay(isoVal);
+    proxy.dispatchEvent(new Event('change'));
+    if (onInput) onInput(isoVal);
+  }
+  proxy.value = value;
+
+  textInput.addEventListener('input', () => {
+    const digits = textInput.value.replace(/\D/g, '').slice(0, 8);
+    let out = digits;
+    if (digits.length > 4) out = `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+    else if (digits.length > 2) out = `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    textInput.value = out;
+  });
+  textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') textInput.blur();
+  });
+  textInput.addEventListener('blur', () => {
+    const typed = textInput.value.trim();
+    if (!typed) return;
+    const parsed = dmyToIsoValue(textInput.value);
+    if (parsed) {
+      if (parsed !== isoVal) commit(parsed);
+    } else {
+      showToast('Data trebuie scrisa in formatul ZZ-LL-AAAA.', { danger: true });
+      textInput.value = isoToDmyDisplay(isoVal);
+    }
+  });
+
+  // ---- mini-calendar ----
+  let panel = null;
+  let onDocMouseDown = null;
+  let onReposition = null;
+  let onKeydown = null;
+
+  function closePanel() {
+    if (!panel) return;
+    panel.remove();
+    panel = null;
+    document.removeEventListener('mousedown', onDocMouseDown, true);
+    document.removeEventListener('keydown', onKeydown, true);
+    window.removeEventListener('scroll', onReposition, true);
+    window.removeEventListener('resize', onReposition);
+  }
+
+  function openPanel() {
+    if (panel) {
+      closePanel();
+      return;
+    }
+    const base = parseIsoDate(isoVal) || new Date();
+    let viewY = base.getFullYear();
+    let viewM = base.getMonth();
+
+    panel = el('div', { class: 'date-cal-panel' });
+    document.body.appendChild(panel);
+    reposition();
+    render();
+
+    onReposition = reposition;
+    onDocMouseDown = (e) => {
+      if (panel && !panel.contains(e.target) && e.target !== calBtn) closePanel();
+    };
+    onKeydown = (e) => {
+      if (e.key === 'Escape') closePanel();
+    };
+    document.addEventListener('mousedown', onDocMouseDown, true);
+    document.addEventListener('keydown', onKeydown, true);
+    window.addEventListener('scroll', onReposition, true);
+    window.addEventListener('resize', onReposition);
+
+    function reposition() {
+      if (!panel) return;
+      const rect = calBtn.getBoundingClientRect();
+      const width = Math.min(300, window.innerWidth - 24);
+      let left = rect.right - width;
+      if (left < 12) left = 12;
+      if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
+      let top = rect.bottom + 6;
+      if (top + 320 > window.innerHeight && rect.top - 6 > 320) top = rect.top - 6 - 320;
+      panel.style.left = `${left}px`;
+      panel.style.top = `${top}px`;
+      panel.style.width = `${width}px`;
+    }
+
+    function render() {
+      panel.innerHTML = '';
+      const header = el('div', { class: 'date-cal-header' }, [
+        el(
+          'button',
+          {
+            type: 'button',
+            class: 'date-cal-nav',
+            onclick: (e) => {
+              e.preventDefault();
+              viewM--;
+              if (viewM < 0) {
+                viewM = 11;
+                viewY--;
+              }
+              render();
+            },
+          },
+          ['‹']
+        ),
+        el('div', { class: 'date-cal-title' }, [`${RO_MONTHS_FULL[viewM]} ${viewY}`]),
+        el(
+          'button',
+          {
+            type: 'button',
+            class: 'date-cal-nav',
+            onclick: (e) => {
+              e.preventDefault();
+              viewM++;
+              if (viewM > 11) {
+                viewM = 0;
+                viewY++;
+              }
+              render();
+            },
+          },
+          ['›']
+        ),
+      ]);
+      panel.appendChild(header);
+
+      const grid = el('div', { class: 'date-cal-grid' });
+      RO_WEEKDAYS_SHORT.forEach((wd) => grid.appendChild(el('div', { class: 'date-cal-weekday' }, [wd])));
+
+      const daysInMonth = new Date(viewY, viewM + 1, 0).getDate();
+      const daysInPrevMonth = new Date(viewY, viewM, 0).getDate();
+      const firstWeekday = (new Date(viewY, viewM, 1).getDay() + 6) % 7; // 0=Luni...6=Duminica
+      const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+      const todayIso = toIsoDate(new Date());
+
+      for (let i = 0; i < totalCells; i++) {
+        const dayNum = i - firstWeekday + 1;
+        let dayLabel, muted, iso;
+        if (dayNum < 1) {
+          dayLabel = daysInPrevMonth + dayNum;
+          muted = true;
+          iso = null;
+        } else if (dayNum > daysInMonth) {
+          dayLabel = dayNum - daysInMonth;
+          muted = true;
+          iso = null;
+        } else {
+          dayLabel = dayNum;
+          muted = false;
+          iso = toIsoDate(new Date(viewY, viewM, dayNum));
+        }
+        const classes = ['date-cal-day'];
+        if (muted) classes.push('date-cal-day-muted');
+        if (iso && iso === isoVal) classes.push('date-cal-day-selected');
+        if (iso && iso === todayIso) classes.push('date-cal-day-today');
+        const dayBtn = el('button', { type: 'button', class: classes.join(' ') }, [String(dayLabel)]);
+        if (muted) {
+          dayBtn.disabled = true;
+        } else {
+          dayBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            commit(iso);
+            closePanel();
+          });
+        }
+        grid.appendChild(dayBtn);
+      }
+      panel.appendChild(grid);
+    }
+  }
+
+  calBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    openPanel();
+  });
+
+  wrapper.input = proxy;
   return wrapper;
 }
 

@@ -131,6 +131,52 @@ html, body {
 textarea.field-input { resize: vertical; }
 select.field-input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #6b7a94 50%), linear-gradient(135deg, #6b7a94 50%, transparent 50%); background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 13px) calc(50% - 3px); background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
 
+/* Camp de data (ZZ-LL-AAAA + mini-calendar propriu, Luni prima zi) — vezi
+   dateField() din components.js. */
+.date-field-row { display: flex; gap: 8px; }
+.date-field-input { flex: 1; min-width: 0; }
+.date-field-btn {
+  flex-shrink: 0;
+  width: 46px;
+  border-radius: var(--radius-sm);
+  border: 1.4px solid #d8dfea;
+  background: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+.date-field-btn:active { background: rgba(11, 59, 102, 0.08); }
+.date-cal-panel {
+  position: fixed;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated);
+  padding: 10px;
+  z-index: 640;
+}
+.date-cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.date-cal-title { font-weight: 700; font-size: 14px; color: var(--ink); }
+.date-cal-nav {
+  width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent;
+  font-size: 18px; color: var(--brand-primary); cursor: pointer;
+}
+.date-cal-nav:active { background: rgba(11, 59, 102, 0.08); }
+.date-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.date-cal-weekday { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-soft); padding: 4px 0; }
+.date-cal-day {
+  aspect-ratio: 1;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.date-cal-day:active { background: rgba(11, 59, 102, 0.1); }
+.date-cal-day-muted { color: #c3cbdb; cursor: default; }
+.date-cal-day-today { box-shadow: inset 0 0 0 1.4px var(--brand-accent); }
+.date-cal-day-selected { background: var(--brand-primary); color: #fff; font-weight: 700; }
+
 /* Selection tiles (main menu) */
 .tile {
   display: flex;

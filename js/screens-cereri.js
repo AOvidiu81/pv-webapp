@@ -14,7 +14,7 @@
 
 import { el, formatDateRo, countBusinessDaysInclusive, addBusinessDays, parseIsoDate, toIsoDate, fileToken } from './utils.js';
 import { pushScreen } from './router.js';
-import { textField, textAreaField, sectionCard, primaryButton, outlineButton, showToast, tile } from './components.js';
+import { textField, textAreaField, dateField, sectionCard, primaryButton, outlineButton, showToast, tile } from './components.js';
 import { openPrintPreview } from './pdf-print.js';
 import { buildCerereConcediuHtml, buildCerereInvoireHtml, buildCerereDemisieHtml } from './pdf-cereri.js';
 
@@ -145,8 +145,8 @@ async function openCerereConcediuForm({ driver, depot }) {
       );
     }
 
-    const startField = textField({ label: 'Data inceput', type: 'date', value: toIsoDate(state.dataInceput) });
-    const endField = textField({ label: 'Data sfarsit', type: 'date', value: toIsoDate(state.dataSfarsit) });
+    const startField = dateField({ label: 'Data inceput', value: toIsoDate(state.dataInceput) });
+    const endField = dateField({ label: 'Data sfarsit', value: toIsoDate(state.dataSfarsit) });
     startField.input.addEventListener('change', () => {
       const d = parseIsoDate(startField.input.value);
       if (!d) return;
@@ -217,7 +217,7 @@ async function openCerereInvoireForm({ driver, depot }) {
     ]);
 
     const today = new Date();
-    const dataField = textField({ label: 'Data invoire', type: 'date', value: toIsoDate(today) });
+    const dataField = dateField({ label: 'Data invoire', value: toIsoDate(today) });
     const oraInceputField = textField({ label: 'Ora inceput', type: 'time', value: '09:00' });
     const oraSfarsitField = textField({ label: 'Ora sfarsit', type: 'time', value: '12:00' });
     const motivField = textAreaField({ label: 'Motiv invoire (optional)', rows: 2 });
@@ -395,8 +395,8 @@ async function openCerereDemisieForm({ driver, depot, caz, subcaz }) {
     const today = new Date();
     const state = { dataCererii: today, dataIncetare: caz === 2 ? addBusinessDays(today, zileLucratoare) : today };
 
-    const cerereField = textField({ label: 'Data cererii', type: 'date', value: toIsoDate(state.dataCererii) });
-    const incetareField = textField({ label: 'Data incetare', type: 'date', value: toIsoDate(state.dataIncetare) });
+    const cerereField = dateField({ label: 'Data cererii', value: toIsoDate(state.dataCererii) });
+    const incetareField = dateField({ label: 'Data incetare', value: toIsoDate(state.dataIncetare) });
 
     cerereField.input.addEventListener('change', () => {
       const d = parseIsoDate(cerereField.input.value);
