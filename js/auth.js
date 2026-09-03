@@ -229,6 +229,51 @@ export async function getTodayBirthdays() {
   }
 }
 
+/** Urca in Supabase (PDF final + rand de metadate) un Proces Verbal abia
+ * salvat de sofer — ca administratorul sa il vada in Istoric PV din panoul
+ * de admin, separat de copia locala (IndexedDB) care ramane neschimbata si
+ * ramane sursa principala pentru sofer. Fire-and-forget, best-effort: PV-ul
+ * e deja salvat local INAINTE sa ajungem aici (vezi onSave() din
+ * screens-pv-form.js), deci daca soferul nu are internet in acel moment,
+ * sau ceva pica pe drum, nu pierde nimic — doar ca acel PV nu va aparea in
+ * admin pana la urmatoarea generare cu semnal (nu reincercam automat mai
+ * tarziu, ca sa nu complicam — in practica soferii au semnal aproape mereu
+ * cand salveaza un PV). `meta.id` e acelasi uuid folosit si pentru randul
+ * din PvRepo local (vezi uuid() din onSave()), ca cele doua copii sa poata
+ * fi asociate daca e nevoie vreodata. */
+export async function uploadPvRecordToCloud(meta, blob) {
+  try {
+    const supabase = await getSupabase();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData?.session;
+    // Fara sesiune (foarte rar, ex. token expirat exact in acest moment) nu
+    // putem respecta politica RLS de INSERT ("driver_id = auth.uid()") —
+    // renuntam silentios, PV-ul ramane oricum salvat local.
+    if (!session) return;
+    const storagePath = `${session.user.id}/${meta.id}.pdf`;
+    const { error: uploadErr } = await supabase.storage.from('pv-documents').upload(storagePath, blob, {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
+    if (uploadErr) return;
+    await supabase.from('pv_records').insert({
+      id: meta.id,
+      driver_id: session.user.id,
+      driver_name: meta.driverName,
+      depot_name: meta.depotName,
+      client_name: meta.clientName,
+      process_type: meta.processType,
+      pv_number: meta.pvNumber,
+      car_number: meta.carNumber,
+      created_at: meta.createdAt,
+      file_size: blob.size,
+      storage_path: storagePath,
+    });
+  } catch (e) {
+    // best-effort — vezi comentariul de mai sus
+  }
+}
+
 /** Sincronizeaza profilul propriu (ca "sofer" local) si flota de masini /
  * catalogul de produse active in IndexedDB, ca ecranele existente (care
  * citesc DriverRepo/CarRepo/CatalogRepo local) sa functioneze neschimbate.

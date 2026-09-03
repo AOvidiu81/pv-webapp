@@ -131,6 +131,14 @@ tbody tr:last-child td { border-bottom: none; }
 
 .empty-state { padding: 40px 20px; text-align: center; color: var(--ink-soft); font-size: 14px; }
 
+/* ---- Procese Verbale (filtre + rezumat) ---- */
+.filters-card { padding: 16px; margin-bottom: 14px; }
+.filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.filter-row .field { margin-bottom: 0; min-width: 150px; flex: 1; }
+.filter-actions { flex: 0 0 auto; min-width: 0; }
+.pv-summary { color: var(--ink-soft); font-size: 13px; margin: 0 0 10px 2px; }
+.pv-load-more-row { display: flex; justify-content: center; margin-top: 14px; }
+
 /* ---- Modal ---- */
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(11, 27, 46, 0.5);

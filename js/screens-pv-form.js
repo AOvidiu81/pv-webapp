@@ -29,6 +29,7 @@ import { annotatePhotoWithMetadata } from './photo-annotate.js';
 import { nextPvNumber, nextAvizNumber, prefixForType, displayPvNumber, displayAvizNumber } from './pv-numbering.js';
 import { buildDocumentHtml, openPrintPreview } from './pdf-print.js';
 import { openWhatsAppImportDialog } from './whatsapp-import.js';
+import { uploadPvRecordToCloud } from './auth.js';
 
 const NA = 'N/A';
 const NEEDS_AVIZ = new Set(['AMPLASARE', 'RIDICARE', 'VANZARE']);
@@ -700,7 +701,30 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
 
         const html = buildDocumentHtml({ model, isPreview: false, photoUrls: annotatedPhotoUrls, beneficiarySignatureUrl: model.beneficiarySignatureUrl, driverSignatureUrl: model.driverSignatureUrl, stampAvailable: true });
         showToast('Proces verbal salvat in istoric.');
-        await openPrintPreview({ html, title: 'Proces Verbal salvat', suggestedFileName: fileName });
+        await openPrintPreview({
+          html,
+          title: 'Proces Verbal salvat',
+          suggestedFileName: fileName,
+          // Sincronizare in cloud pentru Istoric PV din admin — vezi
+          // uploadPvRecordToCloud() din auth.js si comentariul din
+          // openPrintPreview(). Doar aici (nu si la onPreview()), fiindca
+          // acolo e doar o previzualizare cu numar fictiv, nu un PV real.
+          onPdfReady: (blob) => {
+            uploadPvRecordToCloud(
+              {
+                id,
+                pvNumber,
+                driverName: driver.name,
+                depotName: depot.name,
+                clientName: model.clientName,
+                processType,
+                carNumber: car.numar,
+                createdAt,
+              },
+              blob
+            );
+          },
+        });
         pop({ saved: true });
       } catch (e) {
         console.error(e);

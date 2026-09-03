@@ -206,6 +206,8 @@ function enterDashboard() {
   loadDrivers();
   loadVehicles();
   loadProducts();
+  loadPvFilterDrivers();
+  loadPvRecords({ resetLimit: true });
 }
 
 // ---------- tabs ----------
@@ -684,6 +686,172 @@ document.getElementById('add-product-btn').addEventListener('click', async () =>
       },
     ],
   });
+});
+
+// ================= PROCESE VERBALE =================
+// Istoric al PV-urilor sincronizate din PWA (vezi uploadPvRecordToCloud() din
+// js/auth.js) — copie separata in Supabase, NU inlocuieste istoricul local de
+// pe telefonul soferului. Adminul le vede aici, le poate descarca (link
+// semnat, valabil 2 minute, catre PDF-ul exact generat de sofer) si sterge
+// definitiv dupa ce le-a arhivat local pe calculator.
+
+const PV_TYPE_LABELS = {
+  AMPLASARE: 'Amplasare',
+  RIDICARE: 'Ridicare',
+  SERVISARE: 'Servisare',
+  'LIPSA ACCES': 'Lipsa acces',
+  VANZARE: 'Vanzare',
+};
+
+let pvCurrentLimit = 200;
+
+function pvFileSizeLabel(bytes) {
+  if (bytes === null || bytes === undefined) return '-';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Acelasi format ca displayPvNumber() din js/pv-numbering.js ("PV_00001" ->
+// "PV - 00001") — reprodus aici, nu importat, ca admin.js sa ramana complet
+// independent de codul PWA-ului (nu impart niciun modul intre cele doua app-uri).
+function pvDisplayNumber(value) {
+  const match = /^(PV[A-Z]*)_(\d{5})$/.exec(value || '');
+  if (!match) return value || '-';
+  return `${match[1]} - ${match[2]}`;
+}
+
+async function loadPvFilterDrivers() {
+  const select = document.getElementById('pv-filter-driver');
+  const { data, error } = await supabase.rpc('list_drivers');
+  if (error || !data) return;
+  const currentValue = select.value;
+  select.innerHTML =
+    '<option value="">Toti soferii</option>' + data.map((d) => `<option value="${esc(d.id)}">${esc(d.full_name)}</option>`).join('');
+  select.value = currentValue;
+}
+
+async function loadPvRecords({ resetLimit = false } = {}) {
+  if (resetLimit) pvCurrentLimit = 200;
+  const tbody = document.getElementById('pv-tbody');
+  const summary = document.getElementById('pv-summary');
+  const loadMoreRow = document.getElementById('pv-load-more-row');
+  tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Se incarca...</td></tr>`;
+  summary.textContent = '';
+  loadMoreRow.style.display = 'none';
+
+  const driverId = document.getElementById('pv-filter-driver').value || null;
+  const processType = document.getElementById('pv-filter-type').value || null;
+  const fromResult = dmyToIso(document.getElementById('pv-filter-from').value);
+  const toResult = dmyToIso(document.getElementById('pv-filter-to').value);
+  if (fromResult.error) {
+    tbody.innerHTML = '';
+    summary.textContent = 'Data "de la" nu este valida (foloseste ZZ-LL-AAAA).';
+    return;
+  }
+  if (toResult.error) {
+    tbody.innerHTML = '';
+    summary.textContent = 'Data "pana la" nu este valida (foloseste ZZ-LL-AAAA).';
+    return;
+  }
+
+  // RPC (POST), nu .from().select() (GET) — vezi comentariul din loadDrivers().
+  const { data, error } = await supabase.rpc('list_pv_records', {
+    p_driver_id: driverId,
+    p_process_type: processType,
+    p_date_from: fromResult.value || null,
+    p_date_to: toResult.value || null,
+    p_limit: pvCurrentLimit,
+  });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
+    return;
+  }
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Niciun proces verbal in Supabase pentru acest filtru.</td></tr>`;
+    return;
+  }
+
+  const totalBytes = data.reduce((sum, r) => sum + (r.file_size || 0), 0);
+  summary.textContent = `${data.length} document${data.length === 1 ? '' : 'e'} · ${pvFileSizeLabel(totalBytes)} total`;
+
+  tbody.innerHTML = data
+    .map((r) => {
+      const created = new Date(r.created_at);
+      const dateLabel = created.toLocaleDateString('ro-RO') + ' ' + created.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+      return `
+    <tr data-id="${esc(r.id)}">
+      <td data-label="Data">${dateLabel}</td>
+      <td data-label="Nr PV"><strong>${esc(pvDisplayNumber(r.pv_number))}</strong></td>
+      <td data-label="Sofer">${esc(r.driver_name)}</td>
+      <td data-label="Depozit">${esc(r.depot_name || '-')}</td>
+      <td data-label="Client">${esc(r.client_name || '-')}</td>
+      <td data-label="Tip">${esc(PV_TYPE_LABELS[r.process_type] || r.process_type || '-')}</td>
+      <td data-label="Marime">${pvFileSizeLabel(r.file_size)}</td>
+      <td data-label="Actiuni">
+        <div class="row-actions">
+          <button class="btn btn-sm btn-outline" data-act="download">Descarca</button>
+          <button class="btn btn-sm btn-danger-outline" data-act="delete">Sterge</button>
+        </div>
+      </td>
+    </tr>`;
+    })
+    .join('');
+
+  tbody.querySelectorAll('tr').forEach((tr) => {
+    const id = tr.dataset.id;
+    const row = data.find((r) => r.id === id);
+    tr.querySelector('[data-act="download"]').addEventListener('click', () => downloadPvRecord(row));
+    tr.querySelector('[data-act="delete"]').addEventListener('click', () => deletePvRecord(row));
+  });
+
+  loadMoreRow.style.display = data.length >= pvCurrentLimit ? 'flex' : 'none';
+}
+
+async function downloadPvRecord(row) {
+  const { data, error } = await supabase.storage.from('pv-documents').createSignedUrl(row.storage_path, 120);
+  if (error || !data?.signedUrl) {
+    showToast('Nu am putut genera link-ul de descarcare: ' + (error?.message || ''), { danger: true });
+    return;
+  }
+  window.open(data.signedUrl, '_blank');
+}
+
+async function deletePvRecord(row) {
+  await openModal({
+    title: 'Sterge Proces Verbal',
+    bodyHtml: `<p>Aceasta actiune e ireversibila. Stergi definitiv <strong>${esc(pvDisplayNumber(row.pv_number))}</strong> — ${esc(
+      row.client_name || ''
+    )}?</p><p class="hint-text">Asigura-te ca l-ai descarcat local, daca vrei sa-l pastrezi — dupa stergere nu mai poate fi recuperat.</p><div class="error-text" id="m-error"></div>`,
+    actions: [
+      { label: 'Anuleaza', className: 'btn-outline' },
+      {
+        label: 'Sterge definitiv',
+        className: 'btn-danger',
+        onClick: async (backdrop) => {
+          try {
+            const { error: storageErr } = await supabase.storage.from('pv-documents').remove([row.storage_path]);
+            if (storageErr) throw storageErr;
+            const { error: dbErr } = await supabase.from('pv_records').delete().eq('id', row.id);
+            if (dbErr) throw dbErr;
+            showToast('Proces verbal sters.');
+            loadPvRecords();
+          } catch (e) {
+            backdrop.querySelector('#m-error').textContent = e.message;
+            return false;
+          }
+        },
+      },
+    ],
+  });
+}
+
+document.getElementById('pv-filter-apply').addEventListener('click', () => loadPvRecords({ resetLimit: true }));
+attachDmyAutoformat(document.getElementById('pv-filter-from'));
+attachDmyAutoformat(document.getElementById('pv-filter-to'));
+document.getElementById('pv-load-more-btn').addEventListener('click', () => {
+  pvCurrentLimit += 200;
+  loadPvRecords();
 });
 
 // ---------- start ----------

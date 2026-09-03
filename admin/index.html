@@ -49,6 +49,7 @@
     <button class="tab-btn active" data-tab="drivers">Soferi</button>
     <button class="tab-btn" data-tab="vehicles">Masini</button>
     <button class="tab-btn" data-tab="products">Produse</button>
+    <button class="tab-btn" data-tab="pv">Procese Verbale</button>
   </div>
 
   <div class="content">
@@ -94,6 +95,55 @@
           </thead>
           <tbody id="products-tbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-pv">
+      <div class="panel-head">
+        <h2>Procese Verbale</h2>
+      </div>
+      <div class="card filters-card">
+        <div class="filter-row">
+          <div class="field">
+            <label>Sofer</label>
+            <select id="pv-filter-driver"><option value="">Toti soferii</option></select>
+          </div>
+          <div class="field">
+            <label>Tip proces</label>
+            <select id="pv-filter-type">
+              <option value="">Toate tipurile</option>
+              <option value="AMPLASARE">Amplasare</option>
+              <option value="RIDICARE">Ridicare</option>
+              <option value="SERVISARE">Servisare</option>
+              <option value="LIPSA ACCES">Lipsa acces</option>
+              <option value="VANZARE">Vanzare</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>De la data</label>
+            <input id="pv-filter-from" type="text" inputmode="numeric" maxlength="10" placeholder="ZZ-LL-AAAA" />
+          </div>
+          <div class="field">
+            <label>Pana la data</label>
+            <input id="pv-filter-to" type="text" inputmode="numeric" maxlength="10" placeholder="ZZ-LL-AAAA" />
+          </div>
+          <div class="field filter-actions">
+            <label>&nbsp;</label>
+            <button class="btn btn-outline" id="pv-filter-apply">Filtreaza</button>
+          </div>
+        </div>
+      </div>
+      <div class="pv-summary" id="pv-summary"></div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Data</th><th>Nr PV</th><th>Sofer</th><th>Depozit</th><th>Client</th><th>Tip</th><th>Marime</th><th>Actiuni</th></tr>
+          </thead>
+          <tbody id="pv-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pv-load-more-row" id="pv-load-more-row" style="display:none">
+        <button class="btn btn-outline" id="pv-load-more-btn">Incarca mai multe</button>
       </div>
     </div>
   </div>

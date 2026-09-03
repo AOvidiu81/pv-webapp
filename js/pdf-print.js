@@ -507,7 +507,7 @@ export async function printDocument(html, suggestedTitle) {
  * Ecran de previzualizare in-app a documentului, scalat sa incapa pe
  * telefon, cu buton pentru a deschide dialogul de tiparire/salvare PDF.
  */
-export async function openPrintPreview({ html, title = 'Previzualizare document', suggestedFileName, showBadge = false, onConfirmPrint }) {
+export async function openPrintPreview({ html, title = 'Previzualizare document', suggestedFileName, showBadge = false, onConfirmPrint, onPdfReady }) {
   // Fiecare .doc-page e mutata intr-un "frame" care primeste dimensiunile
   // FINALE (scalate) prin JS, ca layout-ul normal (centrare, spatiere) sa
   // functioneze corect indiferent de transform-ul aplicat paginii interioare.
@@ -612,6 +612,12 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
         saveBtn.disabled = false;
         sendBtn.textContent = sendBtnLabel;
         sendBtn.disabled = false;
+        // Sincronizare in cloud (Istoric PV din admin) — vezi
+        // uploadPvRecordToCloud() din auth.js. Refolosim exact acest blob
+        // (PDF-ul deja generat pentru Salveaza/Trimite), fara sa mai randam
+        // documentul a doua oara. Fire-and-forget: nu blocheaza si nu arata
+        // nicio eroare soferului daca esueaza — PV-ul e deja salvat local.
+        if (onPdfReady) onPdfReady(blob);
       })
       .catch((e) => {
         // Lasam butoanele activate chiar daca generarea eager a esuat —
