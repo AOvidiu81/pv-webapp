@@ -831,8 +831,12 @@ async function loadPvRecords({ resetLimit = false } = {}) {
       <td data-label="Marime">${pvFileSizeLabel(r.file_size)}</td>
       <td data-label="Actiuni">
         <div class="row-actions">
-          <button class="btn btn-sm btn-outline" data-act="download">Descarca</button>
-          <button class="btn btn-sm btn-danger-outline" data-act="delete">Sterge</button>
+          ${
+            r.downloaded_at
+              ? `<button class="btn btn-sm btn-success" data-act="download">✓ Fisier Descarcat</button>
+             <button class="btn btn-sm btn-danger-outline" data-act="delete">Sterge</button>`
+              : `<button class="btn btn-sm btn-warning" data-act="download">Descarca</button>`
+          }
         </div>
       </td>
     </tr>`;
@@ -843,7 +847,11 @@ async function loadPvRecords({ resetLimit = false } = {}) {
     const id = tr.dataset.id;
     const row = data.find((r) => r.id === id);
     tr.querySelector('[data-act="download"]').addEventListener('click', () => downloadPvRecord(row));
-    tr.querySelector('[data-act="delete"]').addEventListener('click', () => deletePvRecord(row));
+    // Butonul de Sterge exista in DOM doar dupa ce PV-ul a fost deja
+    // descarcat macar o data (vezi randul din template mai sus) -- inainte
+    // de asta, pur si simplu nu e in pagina, deci verificam ca exista.
+    const deleteBtn = tr.querySelector('[data-act="delete"]');
+    if (deleteBtn) deleteBtn.addEventListener('click', () => deletePvRecord(row));
   });
 
   loadMoreRow.style.display = data.length >= pvCurrentLimit ? 'flex' : 'none';
@@ -873,6 +881,12 @@ async function downloadPvRecord(row) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    // Marcheaza in Supabase ca fisierul a fost descarcat macar o data — abia
+    // dupa asta apare butonul Sterge (siguranta: nu poti sterge un PV inainte
+    // sa confirmi ca l-ai salvat local macar o data). Reincarcam randul ca sa
+    // arate imediat noua stare (Fisier Descarcat + Sterge).
+    const { error: markErr } = await supabase.from('pv_records').update({ downloaded_at: new Date().toISOString() }).eq('id', row.id);
+    if (!markErr) loadPvRecords();
   } catch (e) {
     showToast('Nu am putut descarca fisierul: ' + e.message, { danger: true });
   }
