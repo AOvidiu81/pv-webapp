@@ -4,7 +4,7 @@
 // Trebuie tinut manual sincron cu CACHE_VERSION din sw.js la fiecare
 // modificare — afisat pe ecranul de login/acasa ca soferul sa poata
 // confirma dintr-o privire ce versiune ruleaza pe telefon.
-export const APP_VERSION = 'v45';
+export const APP_VERSION = 'v46';
 
 // "Forteaza actualizarea" — echivalentul mobil al Ctrl+Shift+R de pe PC.
 // Pe telefon nu exista alta optiune de hard-refresh, iar un WebAPK Android
@@ -164,6 +164,19 @@ export function extractLocationFromAddress(address) {
     return part;
   }
   return (address || '').trim();
+}
+
+/** La fel ca extractLocationFromAddress() de mai sus (elimina segmentul de
+ * judet, ex: "jud. Hunedoara"), dar pastreaza TOATE partile ramase din
+ * adresa, nu doar prima -- folosit acolo unde avem nevoie de adresa completa
+ * (localitate + strada), nu doar de localitate (ex: numele fisierului la
+ * salvarea/descarcarea unui PV, unde judetul e deja aratat separat, ca
+ * abreviere de 2 litere -- vezi countyAbbreviation() -- si nu mai trebuie
+ * repetat si scris integral). */
+export function addressWithoutCounty(address) {
+  const parts = (address || '').split(',').map((p) => p.trim()).filter(Boolean);
+  const rest = parts.filter((p) => !withoutDiacritics(p).toUpperCase().startsWith('JUD'));
+  return rest.join(', ') || (address || '').trim();
 }
 
 export function fileToken(value) {

@@ -731,17 +731,32 @@ function fileToken(value) {
     .replace(/^-+|-+$/g, '');
 }
 
-// Numele fisierului la descarcare locala: TIP-CLIENT-LOCATIE-DATA.pdf (ex:
-// "PVA-FLORERO-GROUP-HUNEDOARA-03-09-2026.pdf"). Prefixul de tip (PVA/PVR/
-// etc.) e extras direct din pv_number, ca sa ramana mereu identic cu ce arata
-// coloana "Nr PV" — nu mai reproducem separat maparea tip->prefix.
+// Elimina segmentul de judet dintr-o adresa (ex: "Hunedoara, jud. Hunedoara,
+// str. X" -> "Hunedoara, str. X") -- judetul e deja aratat separat, ca
+// abreviere de 2 litere (row.county, calculata la sofer -- vezi
+// screens-pv-form.js/utils.js din PWA), asa ca nu mai trebuie repetat si
+// scris integral in numele fisierului.
+function addressWithoutCounty(address) {
+  const parts = String(address || '').split(',').map((p) => p.trim()).filter(Boolean);
+  const rest = parts.filter((p) => !/^jud/i.test(p.normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+  return rest.join(', ') || String(address || '').trim();
+}
+
+// Numele fisierului la descarcare locala: TIP-CLIENT-JUDET-LOCATIE-DATA.pdf
+// (ex: "PVA-FLORERO-GRUP-SRL-HD-HUNEDOARA-STR-STEFAN-CEL-MARE-03-09-2026.pdf").
+// Prefixul de tip (PVA/PVR/etc.) e extras direct din pv_number, ca sa ramana
+// mereu identic cu ce arata coloana "Nr PV" — nu mai reproducem separat
+// maparea tip->prefix. Judetul (2 litere, exceptie "B" pentru Bucuresti) vine
+// deja calculat de pe telefon (row.county) — PV-urile facute inainte de
+// aceasta actualizare nu il au, si atunci pur si simplu lipseste din nume.
 function buildPvFileName(row) {
   const prefixMatch = /^(PV[A-Z]*)_/.exec(row.pv_number || '');
   const prefix = prefixMatch ? prefixMatch[1] : 'PV';
   const created = new Date(row.created_at);
   const dateToken = `${String(created.getDate()).padStart(2, '0')}-${String(created.getMonth() + 1).padStart(2, '0')}-${created.getFullYear()}`;
   const clientToken = fileToken(row.client_name) || 'CLIENT';
-  const locationToken = fileToken(row.location) || 'LOCATIE';
+  const restLocation = addressWithoutCounty(row.location);
+  const locationToken = fileToken(`${row.county || ''} ${restLocation}`) || 'LOCATIE';
   return `${prefix}-${clientToken}-${locationToken}-${dateToken}.pdf`;
 }
 
@@ -810,7 +825,7 @@ async function loadPvRecords({ resetLimit = false } = {}) {
       <td data-label="Nr PV"><strong>${esc(pvDisplayNumber(r.pv_number))}</strong></td>
       <td data-label="Tip">${esc(PV_TYPE_LABELS[r.process_type] || r.process_type || '-')}</td>
       <td data-label="Client">${esc(r.client_name || '-')}</td>
-      <td data-label="Locatie">${esc(r.location || '-')}</td>
+      <td data-label="Locatie">${r.county ? `<strong>[${esc(r.county)}]</strong> ` : ''}${esc(r.location || '-')}</td>
       <td data-label="Sofer">${esc(r.driver_name)}</td>
       <td data-label="Depozit">${esc(r.depot_name || '-')}</td>
       <td data-label="Marime">${pvFileSizeLabel(r.file_size)}</td>

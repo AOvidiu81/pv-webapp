@@ -6,7 +6,7 @@
 // salvare in istoric). Include si un import rapid din text WhatsApp
 // (whatsapp-import.js) — completare aproximativa, de verificat manual.
 
-import { el, uuid, formatDateTimeRo, blobToDataUrl, withoutDiacritics, countyAbbreviation, matchCountyCodeInText } from './utils.js';
+import { el, uuid, formatDateTimeRo, blobToDataUrl, withoutDiacritics, countyAbbreviation, matchCountyCodeInText, extractCountyFromAddress, addressWithoutCounty } from './utils.js';
 import { pushScreen } from './router.js';
 import { CatalogRepo, PvRepo, ClientLocationRepo, DepotRepo } from './db.js';
 import {
@@ -717,8 +717,17 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
           }
         }
 
+        // Codul de judet (2 litere, exceptie "B" pentru Bucuresti) — extras
+        // din adresa ("jud. X" scris de sofer la Locatie), sau, daca lipseste,
+        // dedus din depozit (acelasi tipar deja folosit la legenda Anexei
+        // Foto — vezi pdf-print.js). Folosit atat in numele fisierului local
+        // de mai jos, cat si trimis la Supabase (uploadPvRecordToCloud) ca
+        // admin sa il poata folosi identic la descarcare.
+        const countyRaw = extractCountyFromAddress(state.field1) || depot.name;
+        const countyCode = countyAbbreviation(countyRaw);
         const fileToken = (v) => (v || '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-        const fileName = `${fileToken(prefixForType(processType))} - ${fileToken(model.clientName) || 'CLIENT'} - ${fileToken(model.field1) || 'ADRESA'} - ${new Date(createdAt).toLocaleDateString('ro-RO')}`;
+        const locationForFile = `${countyCode} ${addressWithoutCounty(model.field1)}`.trim();
+        const fileName = `${fileToken(prefixForType(processType))} - ${fileToken(model.clientName) || 'CLIENT'} - ${fileToken(locationForFile) || 'ADRESA'} - ${new Date(createdAt).toLocaleDateString('ro-RO')}`;
 
         const html = buildDocumentHtml({ model, isPreview: false, photoUrls: annotatedPhotoUrls, beneficiarySignatureUrl: model.beneficiarySignatureUrl, driverSignatureUrl: model.driverSignatureUrl, stampAvailable: true });
         showToast('Proces verbal salvat in istoric.');
@@ -739,6 +748,7 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
                 depotName: depot.name,
                 clientName: model.clientName,
                 location: model.field1,
+                county: countyCode,
                 processType,
                 carNumber: car.numar,
                 createdAt,
