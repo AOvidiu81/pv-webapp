@@ -2,7 +2,7 @@
 // offline completa dupa prima incarcare. La fiecare modificare a
 // aplicatiei, creste CACHE_VERSION ca telefoanele sa preia noua versiune.
 
-const CACHE_VERSION = 'pv-euro-ecologic-v44';
+const CACHE_VERSION = 'pv-euro-ecologic-v45';
 const APP_SHELL = [
   './',
   'index.html',

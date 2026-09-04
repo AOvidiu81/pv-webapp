@@ -275,6 +275,7 @@ export async function uploadPvRecordToCloud(meta, blob) {
       driver_name: meta.driverName,
       depot_name: meta.depotName,
       client_name: meta.clientName,
+      location: meta.location,
       process_type: meta.processType,
       pv_number: meta.pvNumber,
       car_number: meta.carNumber,

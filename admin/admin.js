@@ -720,6 +720,31 @@ function pvDisplayNumber(value) {
   return `${match[1]} - ${match[2]}`;
 }
 
+// Ajuta la numele fisierului descarcat local (vezi buildPvFileName mai jos):
+// litere mari, fara diacritice, doar A-Z/0-9, cuvintele despartite cu "-".
+function fileToken(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// Numele fisierului la descarcare locala: TIP-CLIENT-LOCATIE-DATA.pdf (ex:
+// "PVA-FLORERO-GROUP-HUNEDOARA-03-09-2026.pdf"). Prefixul de tip (PVA/PVR/
+// etc.) e extras direct din pv_number, ca sa ramana mereu identic cu ce arata
+// coloana "Nr PV" — nu mai reproducem separat maparea tip->prefix.
+function buildPvFileName(row) {
+  const prefixMatch = /^(PV[A-Z]*)_/.exec(row.pv_number || '');
+  const prefix = prefixMatch ? prefixMatch[1] : 'PV';
+  const created = new Date(row.created_at);
+  const dateToken = `${String(created.getDate()).padStart(2, '0')}-${String(created.getMonth() + 1).padStart(2, '0')}-${created.getFullYear()}`;
+  const clientToken = fileToken(row.client_name) || 'CLIENT';
+  const locationToken = fileToken(row.location) || 'LOCATIE';
+  return `${prefix}-${clientToken}-${locationToken}-${dateToken}.pdf`;
+}
+
 async function loadPvFilterDrivers() {
   const select = document.getElementById('pv-filter-driver');
   const { data, error } = await supabase.rpc('list_drivers');
@@ -735,7 +760,7 @@ async function loadPvRecords({ resetLimit = false } = {}) {
   const tbody = document.getElementById('pv-tbody');
   const summary = document.getElementById('pv-summary');
   const loadMoreRow = document.getElementById('pv-load-more-row');
-  tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Se incarca...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Se incarca...</td></tr>`;
   summary.textContent = '';
   loadMoreRow.style.display = 'none';
 
@@ -764,11 +789,11 @@ async function loadPvRecords({ resetLimit = false } = {}) {
   });
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
     return;
   }
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Niciun proces verbal in Supabase pentru acest filtru.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Niciun proces verbal in Supabase pentru acest filtru.</td></tr>`;
     return;
   }
 
@@ -783,10 +808,11 @@ async function loadPvRecords({ resetLimit = false } = {}) {
     <tr data-id="${esc(r.id)}">
       <td data-label="Data">${dateLabel}</td>
       <td data-label="Nr PV"><strong>${esc(pvDisplayNumber(r.pv_number))}</strong></td>
+      <td data-label="Tip">${esc(PV_TYPE_LABELS[r.process_type] || r.process_type || '-')}</td>
+      <td data-label="Client">${esc(r.client_name || '-')}</td>
+      <td data-label="Locatie">${esc(r.location || '-')}</td>
       <td data-label="Sofer">${esc(r.driver_name)}</td>
       <td data-label="Depozit">${esc(r.depot_name || '-')}</td>
-      <td data-label="Client">${esc(r.client_name || '-')}</td>
-      <td data-label="Tip">${esc(PV_TYPE_LABELS[r.process_type] || r.process_type || '-')}</td>
       <td data-label="Marime">${pvFileSizeLabel(r.file_size)}</td>
       <td data-label="Actiuni">
         <div class="row-actions">
@@ -814,7 +840,27 @@ async function downloadPvRecord(row) {
     showToast('Nu am putut genera link-ul de descarcare: ' + (error?.message || ''), { danger: true });
     return;
   }
-  window.open(data.signedUrl, '_blank');
+  // Descarcam efectiv PDF-ul (fetch -> blob) in loc sa deschidem doar link-ul
+  // semnat: atributul "download" al unui <a> e ignorat de browsere pentru
+  // linkuri cross-origin (catre alt domeniu, ca cel al Supabase), asa ca
+  // fara acest pas fisierul ar ajunge cu numele intern (un uuid.pdf) in loc
+  // de numele citibil TIP-CLIENT-LOCATIE-DATA de mai jos. Cu blob-ul local
+  // (aceeasi origine), "download" functioneaza corect.
+  try {
+    const res = await fetch(data.signedUrl);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = buildPvFileName(row);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+  } catch (e) {
+    showToast('Nu am putut descarca fisierul: ' + e.message, { danger: true });
+  }
 }
 
 async function deletePvRecord(row) {
