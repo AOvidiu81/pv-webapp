@@ -30,6 +30,7 @@ import { nextPvNumber, nextAvizNumber, prefixForType, displayPvNumber, displayAv
 import { buildDocumentHtml, openPrintPreview } from './pdf-print.js';
 import { openWhatsAppImportDialog } from './whatsapp-import.js';
 import { uploadPvRecordToCloud } from './auth.js';
+import { saveContact } from './vcard.js';
 
 const NA = 'N/A';
 const NEEDS_AVIZ = new Set(['AMPLASARE', 'RIDICARE', 'VANZARE']);
@@ -247,6 +248,26 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
       const phoneEl = fieldWithError('beneficiaryPhone', (err) =>
         textField({ label: isLipsaAcces ? 'Telefon (optional)' : 'Telefon', value: state.beneficiaryPhone, errorText: err, onInput: (v) => { state.beneficiaryPhone = v; missing.delete('beneficiaryPhone'); } })
       );
+      // Salveaza contactul beneficiarului in agenda telefonului (vcard.js) —
+      // numele clientului + persoana responsabila ca nume de contact, numele
+      // clientului ca firma (ORG) si telefonul completat mai sus. Pusa aici,
+      // imediat dupa campul de telefon, ca soferul sa poata salva contactul
+      // de indata ce a completat numarul, fara sa mai caute alt buton.
+      const saveContactBtn = outlineButton(
+        '📇 Salveaza contact in agenda',
+        async () => {
+          if (!state.clientName.trim() && !state.beneficiaryResponsible.trim() && !state.beneficiaryPhone.trim()) {
+            showToast('Completeaza cel putin numele sau telefonul ca sa poti salva contactul.');
+            return;
+          }
+          const contactName = [state.clientName.trim(), state.beneficiaryResponsible.trim()].filter(Boolean).join(' - ');
+          await saveContact({
+            name: contactName,
+            org: state.clientName.trim(),
+            phone: state.beneficiaryPhone.trim(),
+          });
+        }
+      );
 
       const ciField = textField({
         label: 'CI',
@@ -282,7 +303,7 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         { disabled: state.beneficiaryAbsentFromLocation, error: sigError }
       );
 
-      const children = [clientField, field1El, contractEl, respEl, phoneEl, ciRow, toggleRow, el('div', { style: 'height:10px' })];
+      const children = [clientField, field1El, contractEl, respEl, phoneEl, saveContactBtn, ciRow, toggleRow, el('div', { style: 'height:10px' })];
       if (sigError) children.push(el('div', { class: 'hint-text' }, ['Semnatura beneficiarului este obligatorie.']));
       children.push(sigBtn);
       if (state.beneficiarySignatureUrl) children.push(el('img', { src: state.beneficiarySignatureUrl, style: 'height:70px;margin-top:8px;object-fit:contain;background:#fff;border:1px solid var(--border);border-radius:8px;padding:4px' }));

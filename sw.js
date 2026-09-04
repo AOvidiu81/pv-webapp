@@ -2,7 +2,7 @@
 // offline completa dupa prima incarcare. La fiecare modificare a
 // aplicatiei, creste CACHE_VERSION ca telefoanele sa preia noua versiune.
 
-const CACHE_VERSION = 'pv-euro-ecologic-v43';
+const CACHE_VERSION = 'pv-euro-ecologic-v44';
 const APP_SHELL = [
   './',
   'index.html',
@@ -22,6 +22,7 @@ const APP_SHELL = [
   'js/pdf-cereri.js',
   'js/whatsapp-import.js',
   'js/auth.js',
+  'js/vcard.js',
   'js/screens-login.js',
   'js/screens-setup.js',
   'js/screens-home.js',
