@@ -5,6 +5,7 @@
 import { el, formatDateRo, weekdayLabelRo, vechimeLabel, APP_VERSION, forceUpdateApp } from './utils.js';
 import { pushScreen } from './router.js';
 import { DriverRepo, CarRepo, DepotRepo } from './db.js';
+import { getCurrentProfile, syncMasterData } from './auth.js';
 import { selectField, sectionCard, primaryButton, showToast, tile } from './components.js';
 import { openSettingsScreen } from './screens-setup.js';
 import { PROCESS_TYPES, COMPANY_INFO } from './catalog-defaults.js';
@@ -111,7 +112,26 @@ export async function openMainSelector() {
       continueBtn.disabled = false;
     }
 
-    async function load() {
+    // Soferi/masini/produse/depozite sunt gestionate din admin si sincronizate
+    // local doar la runLoginGate() (o singura data, la pornirea aplicatiei —
+    // vezi app.js). Cat timp aplicatia ramane deschisa/instalata si nu se
+    // reincarca pagina, un depozit nou adaugat de admin NU ajungea niciodata
+    // in acest ecran, chiar cu semnal, pentru ca nimic nu mai cerea din nou
+    // datele de la Supabase — soferul trebuia sa dea Deconectare (care face
+    // location.reload()) ca sa il vada. Re-sincronizam aici, silentios si
+    // best-effort (fara sa blocam afisarea daca nu e semnal), de fiecare data
+    // cand se (re)incarca acest ecran, ca sa nu mai fie nevoie de asta.
+    async function resyncFromCloud() {
+      try {
+        const profile = await getCurrentProfile();
+        if (profile) await syncMasterData(profile);
+      } catch (e) {
+        // fara semnal / eroare de retea: continuam cu ce e deja local
+      }
+    }
+
+    async function load({ resync = true } = {}) {
+      if (resync) await resyncFromCloud();
       [drivers, cars, depots] = await Promise.all([DriverRepo.getAll(), CarRepo.getAll(), DepotRepo.getAll()]);
       selectedDriver = drivers.find((d) => d.id === selectedDriver?.id) || drivers[0] || null;
       selectedCar = cars.find((c) => c.id === selectedCar?.id) || cars[0] || null;
@@ -119,7 +139,15 @@ export async function openMainSelector() {
       renderForm();
       renderInfoCard();
     }
-    load();
+    load({ resync: false }); // sincronizarea initiala s-a facut deja la runLoginGate() (app.js)
+
+    // Daca soferul lasa aplicatia in fundal (schimba tabul/aplicatia) si se
+    // intoarce mai tarziu la ea fara sa o reincarce, reincercam sincronizarea
+    // — asa apar depozitele/masinile/produsele noi adaugate intre timp din
+    // admin, fara sa mai fie nevoie de Deconectare.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') load();
+    });
 
     continueBtn.onclick = () => {
       if (!selectedDriver || !selectedCar || !selectedDepot) return;
