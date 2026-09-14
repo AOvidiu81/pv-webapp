@@ -106,6 +106,7 @@
       <div class="subtabs">
         <button class="subtab-btn active" data-subtab="principal">Depozit Principal</button>
         <button class="subtab-btn" data-subtab="secundar">Depozit Secundar</button>
+        <button class="subtab-btn" data-subtab="sediu">Sediu</button>
       </div>
 
       <div class="subpanel active" id="subpanel-principal">
@@ -135,6 +136,23 @@
             </thead>
             <tbody id="depots-secundar-tbody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="subpanel" id="subpanel-sediu">
+        <div class="panel-head">
+          <p class="hint-text" style="margin:0">Datele firmei — apar pe antetul fiecarui Proces Verbal / Aviz generat si sunt folosite ca adresa de retrimitere pentru avizele din judetul Harghita (sediul firmei, nu un depozit de teren).</p>
+        </div>
+        <div class="card" style="padding:20px;max-width:520px">
+          <div class="field"><label>Denumire firma</label><input id="sediu-name" /></div>
+          <div class="field"><label>Adresa sediu</label><input id="sediu-address" /></div>
+          <div class="field"><label>Nr. Reg. Com.</label><input id="sediu-regcom" /></div>
+          <div class="field"><label>CUI</label><input id="sediu-cui" /></div>
+          <div class="field"><label>Telefon</label><input id="sediu-phone" /></div>
+          <div class="field"><label>Email</label><input id="sediu-email" placeholder="ex: info@eurowc.ro" /></div>
+          <div class="field"><label>Website</label><input id="sediu-website" /></div>
+          <div class="error-text" id="sediu-error"></div>
+          <button class="btn btn-primary" id="save-sediu-btn">Salveaza</button>
         </div>
       </div>
     </div>

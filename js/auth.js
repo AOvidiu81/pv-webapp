@@ -14,7 +14,7 @@
 // cachuite local cand reteaua lipseste.
 
 import { DriverRepo, CarRepo, DepotRepo, CatalogRepo, MetaRepo } from './db.js';
-import { DEFAULT_AUXILIARY_BY_CATEGORY } from './catalog-defaults.js';
+import { DEFAULT_AUXILIARY_BY_CATEGORY, COMPANY_INFO } from './catalog-defaults.js';
 
 const SUPABASE_URL = 'https://vvhvxshwmhiakuxnmckg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2aHZ4c2h3bWhpYWt1eG5tY2tnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NTM3NDAsImV4cCI6MjEwMzQyOTc0MH0.HqAlewj-VmntfOraM-Ps0joimGaUVB0mvUoHQgsVCfg';
@@ -401,5 +401,43 @@ export async function syncMasterData(profile) {
     }
   } catch (e) {
     // offline: pastram depozitele cachuite anterior
+  }
+
+  try {
+    // Datele firmei (Sediu) — gestionate din admin (tab Depozite > Sediu),
+    // ca sa nu mai fie nevoie de o versiune noua de cod pentru o simpla
+    // schimbare de email/telefon/adresa. COMPANY_INFO e importat din
+    // catalog-defaults.js ca obiect (nu valori primitive), asa ca il
+    // MODIFICAM in loc (Object.assign) — toate modulele care l-au importat
+    // deja (pdf-print.js, screens-home.js, screens-pv-form.js) tin o
+    // referinta la acelasi obiect, deci vad automat noile valori, fara sa
+    // mai fie nevoie sa treaca datele explicit prin fiecare functie.
+    const { data, error } = await supabase.rpc('get_company_info');
+    if (!error && data && data.length) {
+      const c = data[0];
+      Object.assign(COMPANY_INFO, {
+        name: c.name || COMPANY_INFO.name,
+        address: c.address || COMPANY_INFO.address,
+        regCom: c.reg_com || COMPANY_INFO.regCom,
+        cui: c.cui || COMPANY_INFO.cui,
+        phone: c.phone || COMPANY_INFO.phone,
+        email: c.email || COMPANY_INFO.email,
+        website: c.website || COMPANY_INFO.website,
+      });
+      // cachuim si local, ca o pornire OFFLINE viitoare sa foloseasca ultima
+      // varianta cunoscuta (sincronizata), nu valorile implicite din cod.
+      await MetaRepo.set('companyInfo', { ...COMPANY_INFO });
+    } else {
+      const cached = await MetaRepo.get('companyInfo');
+      if (cached?.value) Object.assign(COMPANY_INFO, cached.value);
+    }
+  } catch (e) {
+    // offline: aplicam ultima copie cachuita local, daca exista
+    try {
+      const cached = await MetaRepo.get('companyInfo');
+      if (cached?.value) Object.assign(COMPANY_INFO, cached.value);
+    } catch (e2) {
+      // fara cache local nici acesta -> ramanem pe valorile implicite din cod
+    }
   }
 }

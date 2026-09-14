@@ -207,6 +207,7 @@ function enterDashboard() {
   loadVehicles();
   loadProducts();
   loadDepots();
+  loadSediu();
   loadPvFilterDrivers();
   loadPvRecords({ resetLimit: true });
 }
@@ -898,6 +899,61 @@ document.getElementById('add-depot-principal-btn').addEventListener('click', () 
 document.getElementById('add-depot-secundar-btn').addEventListener('click', () => {
   openDepotEditor.nextType = 'secundar';
   openDepotEditor(null);
+});
+
+// ================= SEDIU =================
+// Datele firmei (un singur rand in Supabase, vezi tabelul company_info) —
+// inainte hardcodate in js/catalog-defaults.js (COMPANY_INFO), acum
+// editabile de aici. Aplicatia soferilor le sincronizeaza la syncMasterData()
+// (js/auth.js) si le foloseste pe antetul documentelor si ca adresa de
+// retrimitere a avizului pentru judetul Harghita.
+async function loadSediu() {
+  const { data, error } = await supabase.rpc('get_company_info');
+  const errEl = document.getElementById('sediu-error');
+  if (error) {
+    errEl.textContent = 'Eroare la incarcare: ' + error.message;
+    return;
+  }
+  errEl.textContent = '';
+  const c = (data && data[0]) || {};
+  document.getElementById('sediu-name').value = c.name || '';
+  document.getElementById('sediu-address').value = c.address || '';
+  document.getElementById('sediu-regcom').value = c.reg_com || '';
+  document.getElementById('sediu-cui').value = c.cui || '';
+  document.getElementById('sediu-phone').value = c.phone || '';
+  document.getElementById('sediu-email').value = c.email || '';
+  document.getElementById('sediu-website').value = c.website || '';
+}
+
+document.getElementById('save-sediu-btn').addEventListener('click', async () => {
+  const errEl = document.getElementById('sediu-error');
+  const btn = document.getElementById('save-sediu-btn');
+  const payload = {
+    name: document.getElementById('sediu-name').value.trim(),
+    address: document.getElementById('sediu-address').value.trim(),
+    reg_com: document.getElementById('sediu-regcom').value.trim(),
+    cui: document.getElementById('sediu-cui').value.trim(),
+    phone: document.getElementById('sediu-phone').value.trim(),
+    email: document.getElementById('sediu-email').value.trim(),
+    website: document.getElementById('sediu-website').value.trim(),
+  };
+  if (!payload.name || !payload.email) {
+    errEl.textContent = 'Denumirea si emailul sunt obligatorii.';
+    return;
+  }
+  errEl.textContent = '';
+  btn.disabled = true;
+  btn.textContent = 'Se salveaza...';
+  try {
+    const { error } = await supabase.from('company_info').update(payload).eq('id', true);
+    if (error) throw error;
+    showToast('Datele firmei au fost actualizate.');
+  } catch (e) {
+    errEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salveaza';
+  }
 });
 
 // ================= PROCESE VERBALE =================
