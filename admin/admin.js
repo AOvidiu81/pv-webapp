@@ -16,6 +16,39 @@ const FUNCTIONS_URL = SUPABASE_URL + '/functions/v1/admin-manage-users';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Cache cu toate depozitele (Principal + Secundare), populat de loadDepots()
+// la pornirea panoului (vezi apelurile de mai jos) — folosit ca sursa pentru
+// selectul "Depozit" din formularele de Sofer/Masina, ca fiecare sofer/masina
+// sa poata fi alocat unui depozit (implicit cel Principal), pentru evidenta
+// activelor/angajatilor pe depozite.
+let allDepotsCache = [];
+
+function depotSelectHtml(id, selectedDepotId) {
+  if (!allDepotsCache.length) {
+    return `<select id="${id}" disabled><option>Niciun depozit definit — vezi tabul Depozite</option></select>`;
+  }
+  const options = allDepotsCache
+    .map((d) => {
+      const label = d.type === 'principal' ? `${d.name} (Principal)` : d.name;
+      return `<option value="${d.id}" ${String(d.id) === String(selectedDepotId) ? 'selected' : ''}>${esc(label)}</option>`;
+    })
+    .join('');
+  return `<select id="${id}">${options}</select>`;
+}
+
+function defaultPrincipalDepotId() {
+  return allDepotsCache.find((d) => d.type === 'principal')?.id || allDepotsCache[0]?.id || '';
+}
+
+// Foloseste cache-ul deja incarcat de loadDepots() la pornire; il reincarca
+// explicit doar in cazul rar in care formularul e deschis inainte ca acel
+// apel initial sa se termine (ex: retea foarte lenta).
+async function ensureDepotsCache() {
+  if (allDepotsCache.length) return;
+  const { data, error } = await supabase.rpc('list_depots');
+  if (!error && data) allDepotsCache = data;
+}
+
 function usernameToEmail(username) {
   const clean = String(username || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
   return `pv-sofer-${clean}@eurowc.ro`;
@@ -270,18 +303,18 @@ function esc(v) {
 // ================= SOFERI =================
 async function loadDrivers() {
   const tbody = document.getElementById('drivers-tbody');
-  tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Se incarca...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Se incarca...</td></tr>`;
   // RPC (POST) in loc de .from().select() (GET): unele CDN-uri cachuiesc
   // raspunsurile GET dupa URL, ignorand contul autentificat — un sofer nou
   // adaugat sau o dezactivare puteau ramane invizibile in tabel mult timp.
   // POST-ul unei functii RPC nu e cachuit, deci datele sunt mereu proaspete.
   const { data, error } = await supabase.rpc('list_drivers');
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
     return;
   }
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Niciun sofer adaugat inca.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Niciun sofer adaugat inca.</td></tr>`;
     return;
   }
   tbody.innerHTML = data
@@ -291,6 +324,7 @@ async function loadDrivers() {
       <td data-label="Utilizator"><strong>${esc(d.username)}</strong></td>
       <td data-label="Nume">${esc(d.full_name)}</td>
       <td data-label="Masina">${esc(d.car_number || '-')}</td>
+      <td data-label="Depozit">${esc(d.depot_name || '-')}</td>
       <td data-label="Acces"><span class="badge ${d.active ? 'badge-active' : 'badge-inactive'}">${d.active ? 'Activ' : 'Dezactivat'}</span></td>
       <td data-label="Semnatura"><span class="badge ${d.signature_set ? 'badge-yes' : 'badge-no'}">${d.signature_set ? 'Setata' : 'Neseta'}</span></td>
       <td data-label="Actiuni">
@@ -316,14 +350,17 @@ async function loadDrivers() {
 }
 
 document.getElementById('add-driver-btn').addEventListener('click', async () => {
+  await ensureDepotsCache();
   await openModal({
     title: 'Adauga sofer',
     bodyHtml: `
       <div class="field"><label>Nume utilizator (login)</label><input id="m-username" placeholder="ex: ion.popescu" /></div>
       <div class="field"><label>Nume complet</label><input id="m-fullname" placeholder="Ion Popescu" /></div>
       <div class="field"><label>Numar masina (optional)</label><input id="m-car" placeholder="HR 28 ECC" /></div>
+      <div class="field"><label>Depozit</label>${depotSelectHtml('m-depot', defaultPrincipalDepotId())}</div>
       <div class="field"><label>Parola initiala</label><input id="m-password" type="text" placeholder="minim 6 caractere" /></div>
       <div class="hint-text">Soferul se va loga cu acest nume de utilizator si parola. La prima intrare i se va cere sa-si seteze semnatura.</div>
+      <div class="hint-text">Depozitul aloca soferul unui punct de lucru, ca sa poti tine evidenta angajatilor pe depozite.</div>
       <div class="error-text" id="m-error"></div>
     `,
     actions: [
@@ -335,6 +372,7 @@ document.getElementById('add-driver-btn').addEventListener('click', async () => 
           const username = backdrop.querySelector('#m-username').value.trim();
           const full_name = backdrop.querySelector('#m-fullname').value.trim();
           const car_number = backdrop.querySelector('#m-car').value.trim();
+          const depot_id = backdrop.querySelector('#m-depot').value;
           const password = backdrop.querySelector('#m-password').value;
           const errEl = backdrop.querySelector('#m-error');
           if (!username || !full_name || !password) {
@@ -346,7 +384,7 @@ document.getElementById('add-driver-btn').addEventListener('click', async () => 
             return false;
           }
           try {
-            await callAdminFn('create_driver', { username, password, full_name, car_number });
+            await callAdminFn('create_driver', { username, password, full_name, car_number, depot_id });
             showToast('Sofer adaugat.');
             loadDrivers();
           } catch (e) {
@@ -360,6 +398,7 @@ document.getElementById('add-driver-btn').addEventListener('click', async () => 
 });
 
 async function editDriver(row) {
+  await ensureDepotsCache();
   await openModal({
     title: 'Editeaza sofer',
     bodyHtml: `
@@ -371,6 +410,7 @@ async function editDriver(row) {
       <div class="field"><label>Data angajarii</label><input id="m-angajare" type="text" inputmode="numeric" maxlength="10" placeholder="ZZ-LL-AAAA" value="${esc(isoToDmy(row.data_angajare))}" /></div>
       <div class="field"><label>Functie</label><input id="m-functie" value="${esc(row.functie || '')}" placeholder="ex: Agent Vanzari" /></div>
       <div class="field"><label>Data nasterii</label><input id="m-nastere" type="text" inputmode="numeric" maxlength="10" placeholder="ZZ-LL-AAAA" value="${esc(isoToDmy(row.data_nasterii))}" /></div>
+      <div class="field"><label>Depozit</label>${depotSelectHtml('m-depot', row.depot_id)}</div>
       <div class="hint-text">Functia apare pe Procesele Verbale si pe Cererile generate de sofer. La ziua de nastere, oricine deschide aplicatia soferilor in acea zi vede un mesaj general de felicitare.</div>
       <div class="hint-text">Schimbarea numelui de utilizator schimba si datele de login ale soferului — anunta-l inainte.</div>
       <div class="error-text" id="m-error"></div>
@@ -406,6 +446,7 @@ async function editDriver(row) {
             errEl.textContent = nastereResult.error;
             return false;
           }
+          const depot_id = backdrop.querySelector('#m-depot').value;
           try {
             await callAdminFn('update_driver', {
               user_id: row.id,
@@ -418,6 +459,7 @@ async function editDriver(row) {
               data_angajare: angajareResult.value,
               functie,
               data_nasterii: nastereResult.value,
+              depot_id,
             });
             showToast('Sofer actualizat.');
             loadDrivers();
@@ -517,23 +559,28 @@ async function deleteDriver(row) {
 // ================= MASINI =================
 async function loadVehicles() {
   const tbody = document.getElementById('vehicles-tbody');
-  tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Se incarca...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Se incarca...</td></tr>`;
   // RPC (POST), nu GET — vezi comentariul din loadDrivers().
   const { data, error } = await supabase.rpc('list_vehicles');
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
     return;
   }
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Nicio masina adaugata inca.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Nicio masina adaugata inca.</td></tr>`;
     return;
   }
+  // Selectul de Depozit din fiecare rand are nevoie de allDepotsCache — la
+  // pornirea panoului, loadVehicles() si loadDepots() pornesc in paralel, deci
+  // cache-ul poate sa nu fie inca populat cand se randeaza acest tabel.
+  await ensureDepotsCache();
   tbody.innerHTML = data
     .map(
       (v) => `
     <tr data-id="${v.id}">
       <td data-label="Marca">${esc(v.brand)}</td>
       <td data-label="Numar">${esc(v.plate_number)}</td>
+      <td data-label="Depozit">${depotSelectHtml('depot-select-' + v.id, v.depot_id)}</td>
       <td data-label="Stare"><span class="badge ${v.active ? 'badge-active' : 'badge-inactive'}">${v.active ? 'Activa' : 'Inactiva'}</span></td>
       <td data-label="Actiuni">
         <div class="row-actions">
@@ -552,6 +599,16 @@ async function loadVehicles() {
       if (error) showToast(error.message, { danger: true });
       else loadVehicles();
     });
+    // Depozitul masinii se schimba direct din select, fara modal separat —
+    // ca sa fie rapid de realocat cand se muta o masina intre depozite.
+    const depotSelect = tr.querySelector('[id^="depot-select-"]');
+    if (depotSelect && !depotSelect.disabled) {
+      depotSelect.addEventListener('change', async (ev) => {
+        const { error: depotErr } = await supabase.from('vehicles').update({ depot_id: ev.target.value }).eq('id', id);
+        if (depotErr) showToast(depotErr.message, { danger: true });
+        else showToast('Depozit actualizat.');
+      });
+    }
     tr.querySelector('[data-act="delete"]').addEventListener('click', async () => {
       await openModal({
         title: 'Sterge masina',
@@ -574,11 +631,14 @@ async function loadVehicles() {
 }
 
 document.getElementById('add-vehicle-btn').addEventListener('click', async () => {
+  await ensureDepotsCache();
   await openModal({
     title: 'Adauga masina',
     bodyHtml: `
       <div class="field"><label>Marca</label><input id="m-brand" placeholder="MERCEDES" /></div>
       <div class="field"><label>Numar inmatriculare</label><input id="m-plate" placeholder="HR 28 ECC" /></div>
+      <div class="field"><label>Depozit</label>${depotSelectHtml('m-depot', defaultPrincipalDepotId())}</div>
+      <div class="hint-text">Depozitul aloca masina unui punct de lucru, ca sa poti tine evidenta activelor pe depozite.</div>
       <div class="error-text" id="m-error"></div>
     `,
     actions: [
@@ -589,12 +649,13 @@ document.getElementById('add-vehicle-btn').addEventListener('click', async () =>
         onClick: async (backdrop) => {
           const brand = backdrop.querySelector('#m-brand').value.trim();
           const plate_number = backdrop.querySelector('#m-plate').value.trim();
+          const depot_id = backdrop.querySelector('#m-depot').value;
           const errEl = backdrop.querySelector('#m-error');
           if (!brand || !plate_number) {
             errEl.textContent = 'Completeaza marca si numarul.';
             return false;
           }
-          const { error } = await supabase.from('vehicles').insert({ brand, plate_number });
+          const { error } = await supabase.from('vehicles').insert({ brand, plate_number, depot_id: depot_id || null });
           if (error) {
             errEl.textContent = error.message;
             return false;
@@ -735,8 +796,6 @@ const ROMANIAN_COUNTIES = [
 function countyLabel(code) {
   return ROMANIAN_COUNTIES.find((c) => c.code === code)?.name || code || '-';
 }
-
-let allDepotsCache = [];
 
 async function loadDepots() {
   const tbodyPrincipal = document.getElementById('depots-principal-tbody');
