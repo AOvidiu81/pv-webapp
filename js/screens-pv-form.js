@@ -106,9 +106,11 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
   const savedModels = Object.keys(catalogByModel).sort();
   // Toate depozitele configurate (inclusiv cele secundare/colaboratoare) —
   // folosite pentru a determina automat, dupa ce se gaseste "La Contract" in
-  // comanda, la ce adresa de e-mail trebuie retrimis P.V.-ul semnat: fie
-  // dupa un cuvant cheie de contract/client (ex: "NOVALIS"), fie dupa codul
-  // de judet mentionat (ex: "HD", "Hunedoara") — vezi resolveAvizReturnEmail().
+  // comanda, la ce adresa de e-mail trebuie retrimis P.V.-ul semnat: fie dupa
+  // denumirea depozitului mentionata direct (ex: "Craiova", "Sibiu") sau un
+  // cuvant cheie de contract/client (ex: "NOVALIS"), fie — cand nu apare nici
+  // denumirea, nici cuvantul cheie — dupa codul de judet mentionat (ex: "HD",
+  // "Hunedoara") — vezi resolveAvizReturnEmail().
   const allDepots = await DepotRepo.getAll().catch(() => []);
 
   // Exceptie: HARGHITA [HR] nu e un depozit de teren, ci sediul central al
@@ -116,15 +118,21 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
   // de acolo se retrimit la adresa oficiala a firmei, nu la un "depozit".
   const SPECIAL_COUNTY_EMAILS = { HR: COMPANY_INFO.email };
 
+  // "Depozit CRAIOVA" -> "CRAIOVA" (scoate prefixul comun din denumire, ca sa
+  // ramana doar partea distinctiva de cautat in text).
+  function depotNameKeyword(name) {
+    return withoutDiacritics(name || '').toUpperCase().replace(/^DEPOZIT\s+/, '').trim();
+  }
+
   function resolveAvizReturnEmail(contractReferenceRaw) {
     const normalizedContract = withoutDiacritics(contractReferenceRaw || '').toUpperCase();
 
-    // 1) Cuvant cheie de contract/client (ex: "NOVALIS") — mai specific decat
-    // un judet, asa ca se verifica primul si are prioritate. Un depozit cu
-    // cuvant cheie completat NU mai e luat in calcul mai jos, la potrivirea
-    // dupa judet — altfel doua depozite pe acelasi judet (ex: Depozit SIBIU
-    // si Depozit NOVALIS, ambele SB) s-ar calca in picioare, iar rezultatul
-    // ar depinde de ordinea intamplatoare in care sunt sincronizate local.
+    // 1) Cuvant cheie de contract/client (ex: "NOVALIS") — cea mai specifica
+    // potrivire, verificata prima. Un depozit cu cuvant cheie completat NU
+    // mai e luat in calcul mai jos, la potrivirea dupa judet — altfel doua
+    // depozite pe acelasi judet (ex: Depozit SIBIU si Depozit NOVALIS,
+    // ambele SB) s-ar calca in picioare, iar rezultatul ar depinde de
+    // ordinea intamplatoare in care sunt sincronizate local.
     const keywordMatch = allDepots.find((d) => {
       const keyword = (d.contractKeyword || '').trim();
       if (!keyword || !(d.representativeEmail || '').trim()) return false;
@@ -132,8 +140,23 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
     });
     if (keywordMatch) return keywordMatch.representativeEmail.trim();
 
-    // 2) Codul de judet mentionat in text — doar printre depozitele FARA
-    // cuvant cheie de contract (vezi mai sus).
+    // 2) Denumirea depozitului secundar mentionata direct in text (ex:
+    // soferul scrie "Depozit Craiova" sau doar "Craiova"). Necesar pentru ca
+    // orasul de resedinta al unui judet nu e mereu acelasi cu numele
+    // judetului insusi (Craiova e orasul, dar judetul e Dolj — "Craiova" nu
+    // s-ar fi gasit niciodata la pasul (3), care cauta doar judete). Doar
+    // depozitele SECUNDARE conteaza aici — cel Principal e oricum
+    // fallback-ul implicit de mai jos, nu are nevoie de potrivire dupa nume.
+    const nameMatch = allDepots.find((d) => {
+      if (d.depotType !== 'secundar') return false;
+      const nameKeyword = depotNameKeyword(d.name);
+      if (!nameKeyword || !(d.representativeEmail || '').trim()) return false;
+      return normalizedContract.includes(nameKeyword);
+    });
+    if (nameMatch) return nameMatch.representativeEmail.trim();
+
+    // 3) Codul de judet mentionat in text — doar printre depozitele FARA
+    // cuvant cheie de contract (vezi pasul 1).
     const code = matchCountyCodeInText(contractReferenceRaw);
     if (code) {
       if (SPECIAL_COUNTY_EMAILS[code]) return SPECIAL_COUNTY_EMAILS[code];
