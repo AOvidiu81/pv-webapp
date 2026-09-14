@@ -16,6 +16,14 @@
 import { DriverRepo, CarRepo, DepotRepo, CatalogRepo, MetaRepo } from './db.js';
 import { DEFAULT_AUXILIARY_BY_CATEGORY, COMPANY_INFO } from './catalog-defaults.js';
 
+/** Cheie de comparatie insensibila la majuscule/spatii, folosita ca sa
+ * detectam un rand local (adaugat manual, de INAINTE sa existe admin-ul
+ * centralizat) care de fapt descrie aceeasi masina/acelasi depozit ca unul
+ * proaspat sincronizat — ca sa nu apara duplicat in selectoare. */
+function dedupeKey(value) {
+  return String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
 const SUPABASE_URL = 'https://vvhvxshwmhiakuxnmckg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2aHZ4c2h3bWhpYWt1eG5tY2tnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NTM3NDAsImV4cCI6MjEwMzQyOTc0MH0.HqAlewj-VmntfOraM-Ps0joimGaUVB0mvUoHQgsVCfg';
 const FUNCTIONS_URL = SUPABASE_URL + '/functions/v1/admin-manage-users';
@@ -306,14 +314,25 @@ export async function syncMasterData(profile) {
       name: profile.full_name,
       ci,
       // Functia e acum gestionata de admin (panoul separat) si sincronizata
-      // de aici — nu mai e un camp liber local (vezi si openDriverEditor din
-      // screens-setup.js). Foloseste "profile.functie", nu "" ca inainte.
+      // de aici — nu mai e un camp editabil local. Foloseste "profile.functie", nu "" ca inainte.
       functia: profile.functie || '',
       signatureDataUrl: profile.signature_url || '',
       nrContract: profile.nr_contract || '',
       dataAngajare: profile.data_angajare || '',
       sortOrder: 0,
     });
+    // Soferii/masinile/depozitele nu mai sunt gestionate local (vezi
+    // eliminarea sectiunilor din screens-setup.js) — un singur telefon
+    // corespunde mereu unui singur cont logat, deci orice alt rand de sofer
+    // ramas din perioada de INAINTE sa existe login-ul (id-uri numerice
+    // vechi, generate local) e un rest orfan care doar ar duplica selectorul
+    // de pe Acasa. Il stergem aici, la fiecare sincronizare.
+    const existingDrivers = await DriverRepo.getAll();
+    for (const d of existingDrivers) {
+      if (d.id !== LOCAL_DRIVER_KEY) {
+        await DriverRepo.remove(d.id);
+      }
+    }
   } catch (e) {
     // IndexedDB indisponibil — foarte improbabil, ignoram
   }
@@ -341,6 +360,17 @@ export async function syncMasterData(profile) {
       }
       for (const v of vehicles) {
         await CarRepo.save({ id: 'synced-' + v.id, marca: v.brand, numar: v.plate_number, sortOrder: 0 });
+      }
+      // O masina adaugata manual, local, INAINTE sa existe flota din admin
+      // (id numeric vechi) care are exact acelasi numar de inmatriculare ca
+      // una proaspat sincronizata e acelasi vehicul, doar duplicat vizual in
+      // selector — o stergem.
+      const syncedPlates = new Set(vehicles.map((v) => dedupeKey(v.plate_number)));
+      const stillLocal = await CarRepo.getAll();
+      for (const car of stillLocal) {
+        if (!String(car.id).startsWith('synced-') && syncedPlates.has(dedupeKey(car.numar))) {
+          await CarRepo.remove(car.id);
+        }
       }
     }
   } catch (e) {
@@ -397,6 +427,18 @@ export async function syncMasterData(profile) {
           representativeAccessCode: d.representative_access_code || '',
           sortOrder: d.sort_order || 0,
         });
+      }
+      // Un depozit adaugat manual, local, INAINTE sa existe centralizarea
+      // (id numeric vechi) cu exact aceeasi denumire ca unul proaspat
+      // sincronizat (ex: HUNEDOARA existent deja pe telefon + HUNEDOARA
+      // migrat acum in admin) e acelasi depozit, doar duplicat vizual in
+      // selector — il stergem.
+      const syncedNames = new Set(depots.map((d) => dedupeKey(d.name)));
+      const stillLocal = await DepotRepo.getAll();
+      for (const dep of stillLocal) {
+        if (!String(dep.id).startsWith('synced-') && syncedNames.has(dedupeKey(dep.name))) {
+          await DepotRepo.remove(dep.id);
+        }
       }
     }
   } catch (e) {

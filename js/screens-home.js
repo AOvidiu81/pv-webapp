@@ -76,7 +76,7 @@ export async function openMainSelector() {
     function renderForm() {
       form.innerHTML = '';
       if (!drivers.length || !cars.length || !depots.length) {
-        form.appendChild(el('div', { class: 'empty-state' }, ['Nu exista date suficiente. Adauga cel putin un sofer, o masina si un depozit din Setari.']));
+        form.appendChild(el('div', { class: 'empty-state' }, ['Nu exista date suficiente. Contacteaza administratorul ca sa configureze cel putin un sofer, o masina si un depozit.']));
         continueBtn.disabled = true;
         return;
       }

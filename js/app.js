@@ -1,15 +1,16 @@
 // app.js — bootstrap-ul aplicatiei: verifica daca exista date de baza
-// (sofer/auto/depozit), ruleaza wizard-ul de configurare daca e nevoie,
+// (sofer/auto/depozit — sincronizate automat din admin la login), arata un
+// ecran de asteptare cu reincercare daca adminul nu a configurat inca totul,
 // apoi deschide ecranul principal. Inregistreaza si service worker-ul
 // pentru functionare offline / instalare ca PWA.
 
 import { el } from './utils.js';
 import { DriverRepo, CarRepo, DepotRepo } from './db.js';
-import { runSetupWizard } from './screens-setup.js';
+import { pushScreen } from './router.js';
+import { primaryButton, sectionCard, openModal } from './components.js';
 import { openMainSelector } from './screens-home.js';
 import { runLoginGate } from './screens-login.js';
-import { getTodayBirthdays } from './auth.js';
-import { openModal } from './components.js';
+import { getCurrentProfile, syncMasterData, getTodayBirthdays } from './auth.js';
 
 // Mesaj general de zi de nastere: NU e legat de soferul logat momentan —
 // arata numele oricarui sofer activ a carui zi e chiar azi (data nasterii se
@@ -42,6 +43,32 @@ if (screen.orientation && screen.orientation.lock) {
   screen.orientation.lock('portrait').catch(() => {});
 }
 
+/** Ecran de blocare aratat doar cand adminul nu a configurat inca (sau nu
+ * s-a sincronizat inca, ex: fara semnal la primul login) cel putin un sofer/
+ * o masina/un depozit activ — nu mai exista un wizard local in care soferul
+ * sa le adauge singur, fiindca datele astea vin acum exclusiv din panoul de
+ * admin. "Reincearca" cere din nou sincronizarea, pentru cazul in care
+ * adminul a rezolvat deja intre timp. */
+function showMissingDataScreen(missingLabels) {
+  return pushScreen(({ pop }) => {
+    const screen = el('div', { class: 'screen' });
+    const card = sectionCard('Configurare incompleta', [
+      el('div', { style: 'color:var(--ink-soft);font-size:14px;margin-bottom:16px;line-height:1.5' }, [
+        `Administratorul nu a configurat inca (sau nu s-a sincronizat inca pe acest telefon): ${missingLabels.join(', ')}. Contacteaza administratorul, apoi apasa "Reincearca".`,
+      ]),
+    ]);
+    const retryBtn = primaryButton('Reincearca', async () => {
+      const profile = await getCurrentProfile();
+      if (profile) await syncMasterData(profile);
+      pop();
+    });
+    const scroll = el('div', { class: 'screen-scroll' }, [card]);
+    screen.appendChild(scroll);
+    screen.appendChild(el('div', { class: 'bottom-actions' }, [retryBtn]));
+    return screen;
+  });
+}
+
 async function boot() {
   // Poarta de login: blocheaza pana la autentificare + (la prima utilizare)
   // setarea semnaturii. Sincronizeaza si profilul/masinile/produsele din
@@ -52,11 +79,14 @@ async function boot() {
   // Nu asteptam acest apel — vezi comentariul de la checkBirthdays().
   checkBirthdays();
 
-  const [drivers, cars, depots] = await Promise.all([DriverRepo.getAll(), CarRepo.getAll(), DepotRepo.getAll()]);
-  if (!drivers.length || !cars.length || !depots.length) {
-    // Sofer si masina vin acum din login/sincronizare — de regula doar
-    // depozitul mai lipseste la prima rulare pe un telefon nou.
-    await runSetupWizard();
+  let [drivers, cars, depots] = await Promise.all([DriverRepo.getAll(), CarRepo.getAll(), DepotRepo.getAll()]);
+  while (!drivers.length || !cars.length || !depots.length) {
+    const missing = [];
+    if (!drivers.length) missing.push('soferul');
+    if (!cars.length) missing.push('cel putin o masina activa');
+    if (!depots.length) missing.push('cel putin un depozit');
+    await showMissingDataScreen(missing);
+    [drivers, cars, depots] = await Promise.all([DriverRepo.getAll(), CarRepo.getAll(), DepotRepo.getAll()]);
   }
   await openMainSelector();
 }
