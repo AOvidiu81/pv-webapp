@@ -206,6 +206,7 @@ function enterDashboard() {
   loadDrivers();
   loadVehicles();
   loadProducts();
+  loadDepots();
   loadPvFilterDrivers();
   loadPvRecords({ resetLimit: true });
 }
@@ -217,6 +218,16 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
     document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ---------- sub-taburi (folosite doar de panoul Depozite: Principal / Secundar) ----------
+document.querySelectorAll('.subtab-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.subtab-btn').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.subpanel').forEach((p) => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('subpanel-' + btn.dataset.subtab).classList.add('active');
   });
 });
 
@@ -686,6 +697,207 @@ document.getElementById('add-product-btn').addEventListener('click', async () =>
       },
     ],
   });
+});
+
+// ================= DEPOZITE =================
+// Gestionate centralizat aici (in loc de local, pe fiecare telefon, ca
+// inainte) si sincronizate in aplicatia soferilor prin syncMasterData() /
+// list_active_depots() (vezi js/auth.js) — asa ajung sa fie vizibile atat la
+// alegerea depozitului la inceputul unui P.V., cat si la determinarea
+// automata a adresei de e-mail la care se retrimite avizul semnat, dupa
+// judetul mentionat in campul "La Contract" (vezi resolveAvizReturnEmail()
+// din js/screens-pv-form.js).
+//
+// Depozit Principal: depozitul de baza (in prezent HUNEDOARA) — cel care
+// apare implicit soferilor si e folosit ca adresa de rezerva cand niciun
+// depozit secundar nu se potriveste cu judetul din comanda.
+// Depozit Secundar: depozite colaboratoare din alte judete — fiecare e
+// legat explicit de un judet (ales dintr-o lista, nu scris liber), ca
+// potrivirea sa functioneze mereu corect si sa nu depinda de cum e scrisa
+// denumirea depozitului.
+const ROMANIAN_COUNTIES = [
+  { code: 'AB', name: 'Alba' }, { code: 'AR', name: 'Arad' }, { code: 'AG', name: 'Arges' },
+  { code: 'BC', name: 'Bacau' }, { code: 'BH', name: 'Bihor' }, { code: 'BN', name: 'Bistrita-Nasaud' },
+  { code: 'BT', name: 'Botosani' }, { code: 'BR', name: 'Braila' }, { code: 'BV', name: 'Brasov' },
+  { code: 'B', name: 'Bucuresti' }, { code: 'BZ', name: 'Buzau' }, { code: 'CL', name: 'Calarasi' },
+  { code: 'CS', name: 'Caras-Severin' }, { code: 'CJ', name: 'Cluj' }, { code: 'CT', name: 'Constanta' },
+  { code: 'CV', name: 'Covasna' }, { code: 'DB', name: 'Dambovita' }, { code: 'DJ', name: 'Dolj' },
+  { code: 'GL', name: 'Galati' }, { code: 'GR', name: 'Giurgiu' }, { code: 'GJ', name: 'Gorj' },
+  { code: 'HR', name: 'Harghita' }, { code: 'HD', name: 'Hunedoara' }, { code: 'IL', name: 'Ialomita' },
+  { code: 'IS', name: 'Iasi' }, { code: 'IF', name: 'Ilfov' }, { code: 'MM', name: 'Maramures' },
+  { code: 'MH', name: 'Mehedinti' }, { code: 'MS', name: 'Mures' }, { code: 'NT', name: 'Neamt' },
+  { code: 'OT', name: 'Olt' }, { code: 'PH', name: 'Prahova' }, { code: 'SJ', name: 'Salaj' },
+  { code: 'SM', name: 'Satu Mare' }, { code: 'SB', name: 'Sibiu' }, { code: 'SV', name: 'Suceava' },
+  { code: 'TR', name: 'Teleorman' }, { code: 'TM', name: 'Timis' }, { code: 'TL', name: 'Tulcea' },
+  { code: 'VL', name: 'Valcea' }, { code: 'VS', name: 'Vaslui' }, { code: 'VN', name: 'Vrancea' },
+];
+function countyLabel(code) {
+  return ROMANIAN_COUNTIES.find((c) => c.code === code)?.name || code || '-';
+}
+
+let allDepotsCache = [];
+
+async function loadDepots() {
+  const tbodyPrincipal = document.getElementById('depots-principal-tbody');
+  const tbodySecundar = document.getElementById('depots-secundar-tbody');
+  tbodyPrincipal.innerHTML = `<tr><td colspan="6" class="empty-state">Se incarca...</td></tr>`;
+  tbodySecundar.innerHTML = `<tr><td colspan="6" class="empty-state">Se incarca...</td></tr>`;
+  // RPC (POST), nu GET — vezi comentariul din loadDrivers().
+  const { data, error } = await supabase.rpc('list_depots');
+  if (error) {
+    tbodyPrincipal.innerHTML = tbodySecundar.innerHTML = `<tr><td colspan="6" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
+    return;
+  }
+  allDepotsCache = data || [];
+  const principal = allDepotsCache.filter((d) => d.type === 'principal');
+  const secundar = allDepotsCache.filter((d) => d.type === 'secundar');
+
+  tbodyPrincipal.innerHTML = principal.length
+    ? principal.map((d) => depotRowHtml(d, 'principal')).join('')
+    : `<tr><td colspan="6" class="empty-state">Niciun depozit principal adaugat inca.</td></tr>`;
+  tbodySecundar.innerHTML = secundar.length
+    ? secundar.map((d) => depotRowHtml(d, 'secundar')).join('')
+    : `<tr><td colspan="6" class="empty-state">Niciun depozit secundar adaugat inca.</td></tr>`;
+
+  wireDepotRowActions(tbodyPrincipal, principal);
+  wireDepotRowActions(tbodySecundar, secundar);
+}
+
+function depotRowHtml(d, type) {
+  const repLine = [d.representative_name, d.representative_phone].filter(Boolean).join(' — ') || '-';
+  // Cele doua tabele au coloane usor diferite (vezi index.html): cel
+  // Principal are Adresa, cel Secundar are Judet in loc — randul trebuie sa
+  // aiba exact acelasi numar/ordine de celule ca antetul respectiv.
+  const judetCell = type === 'secundar' ? `<td data-label="Judet"><strong>${esc(countyLabel(d.county_code))}</strong></td>` : '';
+  const addressCell = type === 'principal' ? `<td data-label="Adresa">${esc(d.address || '-')}</td>` : '';
+  return `
+    <tr data-id="${d.id}">
+      ${judetCell}
+      <td data-label="Denumire">${esc(d.name)}</td>
+      ${addressCell}
+      <td data-label="Reprezentant">${repLine}</td>
+      <td data-label="Email">${esc(d.representative_email || '-')}</td>
+      <td data-label="Stare"><span class="badge ${d.active ? 'badge-active' : 'badge-inactive'}">${d.active ? 'Activ' : 'Inactiv'}</span></td>
+      <td data-label="Actiuni">
+        <div class="row-actions">
+          <button class="btn btn-sm btn-outline" data-act="edit">Editeaza</button>
+          <button class="btn btn-sm ${d.active ? 'btn-danger-outline' : 'btn-outline'}" data-act="toggle">${d.active ? 'Dezactiveaza' : 'Activeaza'}</button>
+          <button class="btn btn-sm btn-danger-outline" data-act="delete">Sterge</button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function wireDepotRowActions(tbody, rows) {
+  tbody.querySelectorAll('tr').forEach((tr) => {
+    const id = tr.dataset.id;
+    if (!id) return;
+    const row = rows.find((d) => d.id === id);
+    if (!row) return;
+    tr.querySelector('[data-act="edit"]').addEventListener('click', () => openDepotEditor(row));
+    tr.querySelector('[data-act="toggle"]').addEventListener('click', async () => {
+      const { error } = await supabase.from('depots').update({ active: !row.active }).eq('id', id);
+      if (error) showToast(error.message, { danger: true });
+      else loadDepots();
+    });
+    tr.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+      await openModal({
+        title: 'Sterge depozit',
+        bodyHtml: `<p>Stergi depozitul <strong>${esc(row.name)}</strong>?</p><p class="hint-text">Soferii care aveau acest depozit sincronizat local il vor pierde la urmatoarea sincronizare.</p>`,
+        actions: [
+          { label: 'Anuleaza', className: 'btn-outline' },
+          {
+            label: 'Sterge',
+            className: 'btn-danger',
+            onClick: async () => {
+              const { error } = await supabase.from('depots').delete().eq('id', id);
+              if (error) showToast(error.message, { danger: true });
+              else { showToast('Depozit sters.'); loadDepots(); }
+            },
+          },
+        ],
+      });
+    });
+  });
+}
+
+function depotFormFieldsHtml(type, base) {
+  const countyOptions = ROMANIAN_COUNTIES.map(
+    (c) => `<option value="${c.code}" ${base.county_code === c.code ? 'selected' : ''}>${esc(c.name)}</option>`
+  ).join('');
+  const judetField =
+    type === 'secundar'
+      ? `<div class="field"><label>Judet</label><select id="m-county">${countyOptions}</select></div>`
+      : '';
+  return `
+    ${judetField}
+    <div class="field"><label>Denumire depozit</label><input id="m-name" value="${esc(base.name || '')}" placeholder="${type === 'secundar' ? 'ex: Depozit Alba' : 'ex: HUNEDOARA'}" /></div>
+    <div class="field"><label>Adresa</label><input id="m-address" value="${esc(base.address || '')}" /></div>
+    <div class="field"><label>Reprezentant</label><input id="m-repname" value="${esc(base.representative_name || '')}" /></div>
+    <div class="field"><label>Functie reprezentant</label><input id="m-repfunction" value="${esc(base.representative_function || '')}" /></div>
+    <div class="field"><label>Telefon</label><input id="m-repphone" value="${esc(base.representative_phone || '')}" /></div>
+    <div class="field"><label>Email reprezentant</label><input id="m-repemail" value="${esc(base.representative_email || '')}" placeholder="ex: alba@eurowc.ro" /></div>
+    <div class="field"><label>Parola acces — Cerere de Demisie (optional)</label><input id="m-accesscode" value="${esc(base.representative_access_code || '')}" placeholder="lasa gol = fara verificare parola" /></div>
+    ${
+      type === 'secundar'
+        ? '<div class="hint-text">Cand campul "La Contract" al comenzii mentioneaza acest judet, avizul semnat se retrimite automat la emailul de mai sus.</div>'
+        : '<div class="hint-text">Depozitul principal apare implicit soferilor si e folosit ca adresa de retrimitere cand niciun depozit secundar nu se potriveste cu judetul din comanda.</div>'
+    }
+    <div class="error-text" id="m-error"></div>
+  `;
+}
+
+async function openDepotEditor(existing) {
+  const type = existing?.type || openDepotEditor.nextType;
+  const base = existing || {};
+  await openModal({
+    title: existing ? 'Editeaza depozit' : type === 'secundar' ? 'Adauga depozit secundar' : 'Adauga depozit principal',
+    bodyHtml: depotFormFieldsHtml(type, base),
+    actions: [
+      { label: 'Anuleaza', className: 'btn-outline' },
+      {
+        label: existing ? 'Salveaza' : 'Adauga',
+        className: 'btn-primary',
+        onClick: async (backdrop) => {
+          const name = backdrop.querySelector('#m-name').value.trim();
+          const errEl = backdrop.querySelector('#m-error');
+          if (!name) {
+            errEl.textContent = 'Denumirea depozitului este obligatorie.';
+            return false;
+          }
+          const payload = {
+            type,
+            name,
+            county_code: type === 'secundar' ? backdrop.querySelector('#m-county').value : null,
+            address: backdrop.querySelector('#m-address').value.trim(),
+            representative_name: backdrop.querySelector('#m-repname').value.trim(),
+            representative_function: backdrop.querySelector('#m-repfunction').value.trim(),
+            representative_phone: backdrop.querySelector('#m-repphone').value.trim(),
+            representative_email: backdrop.querySelector('#m-repemail').value.trim(),
+            representative_access_code: backdrop.querySelector('#m-accesscode').value.trim(),
+          };
+          const { error } = existing
+            ? await supabase.from('depots').update(payload).eq('id', existing.id)
+            : await supabase.from('depots').insert(payload);
+          if (error) {
+            errEl.textContent = error.message;
+            return false;
+          }
+          showToast(existing ? 'Depozit actualizat.' : 'Depozit adaugat.');
+          loadDepots();
+        },
+      },
+    ],
+  });
+}
+
+document.getElementById('add-depot-principal-btn').addEventListener('click', () => {
+  openDepotEditor.nextType = 'principal';
+  openDepotEditor(null);
+});
+document.getElementById('add-depot-secundar-btn').addEventListener('click', () => {
+  openDepotEditor.nextType = 'secundar';
+  openDepotEditor(null);
 });
 
 // ================= PROCESE VERBALE =================

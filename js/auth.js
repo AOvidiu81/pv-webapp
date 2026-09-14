@@ -13,7 +13,7 @@
 // retea, iar fiecare functie de mai jos are o cale de rezerva pe date
 // cachuite local cand reteaua lipseste.
 
-import { DriverRepo, CarRepo, CatalogRepo, MetaRepo } from './db.js';
+import { DriverRepo, CarRepo, DepotRepo, CatalogRepo, MetaRepo } from './db.js';
 import { DEFAULT_AUXILIARY_BY_CATEGORY } from './catalog-defaults.js';
 
 const SUPABASE_URL = 'https://vvhvxshwmhiakuxnmckg.supabase.co';
@@ -362,5 +362,44 @@ export async function syncMasterData(profile) {
     }
   } catch (e) {
     // offline: pastram catalogul cachuit anterior (sau valorile implicite)
+  }
+
+  try {
+    // Depozitele (principal + secundare/colaboratoare) sunt gestionate
+    // centralizat din panoul de admin (tab "Depozite") si sincronizate aici
+    // in DepotRepo local, la fel ca masinile mai sus — ca ecranul de acasa
+    // (selectarea depozitului) si formularul de PV (adresa de retrimitere a
+    // avizului semnat) sa vada mereu aceleasi date, pe orice telefon.
+    // RPC (POST), nu GET — vezi comentariul din fetchOwnProfile().
+    const { data: depots, error } = await supabase.rpc('list_active_depots');
+    if (!error && depots) {
+      const existing = await DepotRepo.getAll();
+      const syncedIds = new Set(depots.map((d) => 'synced-' + d.id));
+      // sterge din local doar depozitele sincronizate anterior care nu mai
+      // sunt active/existente pe server; un depozit adaugat manual local
+      // (fara prefix "synced-") ramane neatins
+      for (const dep of existing) {
+        if (String(dep.id).startsWith('synced-') && !syncedIds.has(dep.id)) {
+          await DepotRepo.remove(dep.id);
+        }
+      }
+      for (const d of depots) {
+        await DepotRepo.save({
+          id: 'synced-' + d.id,
+          depotType: d.type,
+          name: d.name,
+          countyCode: d.county_code || '',
+          address: d.address || '',
+          representativeName: d.representative_name || '',
+          representativeFunction: d.representative_function || '',
+          representativePhone: d.representative_phone || '',
+          representativeEmail: d.representative_email || '',
+          representativeAccessCode: d.representative_access_code || '',
+          sortOrder: d.sort_order || 0,
+        });
+      }
+    }
+  } catch (e) {
+    // offline: pastram depozitele cachuite anterior
   }
 }

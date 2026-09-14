@@ -49,6 +49,7 @@
     <button class="tab-btn active" data-tab="drivers">Soferi</button>
     <button class="tab-btn" data-tab="vehicles">Masini</button>
     <button class="tab-btn" data-tab="products">Produse</button>
+    <button class="tab-btn" data-tab="depots">Depozite</button>
     <button class="tab-btn" data-tab="pv">Procese Verbale</button>
   </div>
 
@@ -95,6 +96,46 @@
           </thead>
           <tbody id="products-tbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-depots">
+      <div class="panel-head">
+        <h2>Depozite</h2>
+      </div>
+      <div class="subtabs">
+        <button class="subtab-btn active" data-subtab="principal">Depozit Principal</button>
+        <button class="subtab-btn" data-subtab="secundar">Depozit Secundar</button>
+      </div>
+
+      <div class="subpanel active" id="subpanel-principal">
+        <div class="panel-head">
+          <p class="hint-text" style="margin:0">Depozitul de baza al firmei — apare implicit soferilor la alegerea depozitului si e folosit ca adresa de retrimitere cand niciun depozit secundar nu se potriveste cu judetul din comanda.</p>
+          <button class="btn btn-primary" id="add-depot-principal-btn">+ Adauga depozit principal</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>Denumire</th><th>Adresa</th><th>Reprezentant</th><th>Email</th><th>Stare</th><th>Actiuni</th></tr>
+            </thead>
+            <tbody id="depots-principal-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subpanel" id="subpanel-secundar">
+        <div class="panel-head">
+          <p class="hint-text" style="margin:0">Depozite colaboratoare din alte judete — cand comanda ("La Contract") indica unul dintre aceste judete, avizul semnat se retrimite automat la email-ul de mai jos, nu la depozitul principal.</p>
+          <button class="btn btn-primary" id="add-depot-secundar-btn">+ Adauga depozit secundar</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>Judet</th><th>Denumire</th><th>Reprezentant</th><th>Email</th><th>Stare</th><th>Actiuni</th></tr>
+            </thead>
+            <tbody id="depots-secundar-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 

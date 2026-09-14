@@ -119,8 +119,12 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
     const code = matchCountyCodeInText(contractReferenceRaw);
     if (code) {
       if (SPECIAL_COUNTY_EMAILS[code]) return SPECIAL_COUNTY_EMAILS[code];
+      // Depozitele sincronizate din admin au deja "countyCode" setat explicit
+      // (ales dintr-o lista de judete, nu ghicit din denumire) — mult mai
+      // sigur decat countyAbbreviation(d.name), care ramane doar ca fallback
+      // pentru un depozit adaugat manual, local, fara sincronizare.
       const match = allDepots.find(
-        (d) => countyAbbreviation(d.name) === code && (d.representativeEmail || '').trim()
+        (d) => (d.countyCode || countyAbbreviation(d.name)) === code && (d.representativeEmail || '').trim()
       );
       if (match) return match.representativeEmail.trim();
     }
