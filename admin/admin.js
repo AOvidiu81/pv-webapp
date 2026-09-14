@@ -801,11 +801,12 @@ async function loadDepots() {
   const tbodyPrincipal = document.getElementById('depots-principal-tbody');
   const tbodySecundar = document.getElementById('depots-secundar-tbody');
   tbodyPrincipal.innerHTML = `<tr><td colspan="6" class="empty-state">Se incarca...</td></tr>`;
-  tbodySecundar.innerHTML = `<tr><td colspan="6" class="empty-state">Se incarca...</td></tr>`;
+  tbodySecundar.innerHTML = `<tr><td colspan="7" class="empty-state">Se incarca...</td></tr>`;
   // RPC (POST), nu GET — vezi comentariul din loadDrivers().
   const { data, error } = await supabase.rpc('list_depots');
   if (error) {
-    tbodyPrincipal.innerHTML = tbodySecundar.innerHTML = `<tr><td colspan="6" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
+    tbodyPrincipal.innerHTML = `<tr><td colspan="6" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
+    tbodySecundar.innerHTML = `<tr><td colspan="7" class="empty-state">Eroare: ${esc(error.message)}</td></tr>`;
     return;
   }
   allDepotsCache = data || [];
@@ -817,7 +818,7 @@ async function loadDepots() {
     : `<tr><td colspan="6" class="empty-state">Niciun depozit principal adaugat inca.</td></tr>`;
   tbodySecundar.innerHTML = secundar.length
     ? secundar.map((d) => depotRowHtml(d, 'secundar')).join('')
-    : `<tr><td colspan="6" class="empty-state">Niciun depozit secundar adaugat inca.</td></tr>`;
+    : `<tr><td colspan="7" class="empty-state">Niciun depozit secundar adaugat inca.</td></tr>`;
 
   wireDepotRowActions(tbodyPrincipal, principal);
   wireDepotRowActions(tbodySecundar, secundar);
@@ -826,15 +827,21 @@ async function loadDepots() {
 function depotRowHtml(d, type) {
   const repLine = [d.representative_name, d.representative_phone].filter(Boolean).join(' — ') || '-';
   // Cele doua tabele au coloane usor diferite (vezi index.html): cel
-  // Principal are Adresa, cel Secundar are Judet in loc — randul trebuie sa
-  // aiba exact acelasi numar/ordine de celule ca antetul respectiv.
+  // Principal are Adresa, cel Secundar are Judet + Cuvant cheie in loc —
+  // randul trebuie sa aiba exact acelasi numar/ordine de celule ca antetul
+  // respectiv.
   const judetCell = type === 'secundar' ? `<td data-label="Judet"><strong>${esc(countyLabel(d.county_code))}</strong></td>` : '';
   const addressCell = type === 'principal' ? `<td data-label="Adresa">${esc(d.address || '-')}</td>` : '';
+  const keywordCell =
+    type === 'secundar'
+      ? `<td data-label="Cuvant cheie">${d.contract_keyword ? `<span class="badge badge-active">${esc(d.contract_keyword)}</span>` : '-'}</td>`
+      : '';
   return `
     <tr data-id="${d.id}">
       ${judetCell}
       <td data-label="Denumire">${esc(d.name)}</td>
       ${addressCell}
+      ${keywordCell}
       <td data-label="Reprezentant">${repLine}</td>
       <td data-label="Email">${esc(d.representative_email || '-')}</td>
       <td data-label="Stare"><span class="badge ${d.active ? 'badge-active' : 'badge-inactive'}">${d.active ? 'Activ' : 'Inactiv'}</span></td>
@@ -889,10 +896,21 @@ function depotFormFieldsHtml(type, base) {
     type === 'secundar'
       ? `<div class="field"><label>Judet</label><select id="m-county">${countyOptions}</select></div>`
       : '';
+  // Cuvant cheie de contract/client (optional, doar Secundar): o exceptie
+  // legata de un anumit contract, nu de o zona intreaga — vezi comentariul
+  // din resolveAvizReturnEmail() (js/screens-pv-form.js). Verificat inaintea
+  // judetului, si exclude acest depozit din potrivirea dupa judet, ca sa nu
+  // intre in conflict cu alt depozit de pe acelasi judet (ex: Depozit SIBIU
+  // vs. Depozit NOVALIS, ambele in judetul SB).
+  const keywordField =
+    type === 'secundar'
+      ? `<div class="field"><label>Cuvant cheie contract (optional)</label><input id="m-keyword" value="${esc(base.contract_keyword || '')}" placeholder="ex: NOVALIS" /></div>`
+      : '';
   return `
     ${judetField}
     <div class="field"><label>Denumire depozit</label><input id="m-name" value="${esc(base.name || '')}" placeholder="${type === 'secundar' ? 'ex: Depozit Alba' : 'ex: HUNEDOARA'}" /></div>
     <div class="field"><label>Adresa</label><input id="m-address" value="${esc(base.address || '')}" /></div>
+    ${keywordField}
     <div class="field"><label>Reprezentant</label><input id="m-repname" value="${esc(base.representative_name || '')}" /></div>
     <div class="field"><label>Functie reprezentant</label><input id="m-repfunction" value="${esc(base.representative_function || '')}" /></div>
     <div class="field"><label>Telefon</label><input id="m-repphone" value="${esc(base.representative_phone || '')}" /></div>
@@ -900,7 +918,7 @@ function depotFormFieldsHtml(type, base) {
     <div class="field"><label>Parola acces — Cerere de Demisie (optional)</label><input id="m-accesscode" value="${esc(base.representative_access_code || '')}" placeholder="lasa gol = fara verificare parola" /></div>
     ${
       type === 'secundar'
-        ? '<div class="hint-text">Cand campul "La Contract" al comenzii mentioneaza acest judet, avizul semnat se retrimite automat la emailul de mai sus.</div>'
+        ? '<div class="hint-text">Cand campul "La Contract" al comenzii mentioneaza acest judet, avizul semnat se retrimite automat la emailul de mai sus. Daca ai completat un Cuvant cheie, acela are prioritate (verificat primul) si depozitul nu mai e luat in calcul la potrivirea dupa judet — folositor cand exceptia e legata de un contract/client anume, nu de intreg judetul.</div>'
         : '<div class="hint-text">Depozitul principal apare implicit soferilor si e folosit ca adresa de retrimitere cand niciun depozit secundar nu se potriveste cu judetul din comanda.</div>'
     }
     <div class="error-text" id="m-error"></div>
@@ -930,6 +948,7 @@ async function openDepotEditor(existing) {
             name,
             county_code: type === 'secundar' ? backdrop.querySelector('#m-county').value : null,
             address: backdrop.querySelector('#m-address').value.trim(),
+            contract_keyword: type === 'secundar' ? backdrop.querySelector('#m-keyword').value.trim() || null : null,
             representative_name: backdrop.querySelector('#m-repname').value.trim(),
             representative_function: backdrop.querySelector('#m-repfunction').value.trim(),
             representative_phone: backdrop.querySelector('#m-repphone').value.trim(),

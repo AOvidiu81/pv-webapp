@@ -426,6 +426,10 @@ export async function syncMasterData(profile) {
           representativeEmail: d.representative_email || '',
           representativeAccessCode: d.representative_access_code || '',
           sortOrder: d.sort_order || 0,
+          // Optional: cand e completat, acest depozit e o exceptie legata de
+          // un contract/client anume (ex: "NOVALIS"), nu de un judet — vezi
+          // resolveAvizReturnEmail() din js/screens-pv-form.js.
+          contractKeyword: d.contract_keyword || '',
         });
       }
       // Un depozit adaugat manual, local, INAINTE sa existe centralizarea

@@ -105,9 +105,10 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
   });
   const savedModels = Object.keys(catalogByModel).sort();
   // Toate depozitele configurate (inclusiv cele secundare/colaboratoare) —
-  // folosite pentru a determina automat, dupa codul de judet mentionat "La
-  // Contract" in comanda (ex: "HD", "Hunedoara"), la ce adresa de e-mail
-  // trebuie retrimis P.V.-ul semnat.
+  // folosite pentru a determina automat, dupa ce se gaseste "La Contract" in
+  // comanda, la ce adresa de e-mail trebuie retrimis P.V.-ul semnat: fie
+  // dupa un cuvant cheie de contract/client (ex: "NOVALIS"), fie dupa codul
+  // de judet mentionat (ex: "HD", "Hunedoara") — vezi resolveAvizReturnEmail().
   const allDepots = await DepotRepo.getAll().catch(() => []);
 
   // Exceptie: HARGHITA [HR] nu e un depozit de teren, ci sediul central al
@@ -116,6 +117,23 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
   const SPECIAL_COUNTY_EMAILS = { HR: COMPANY_INFO.email };
 
   function resolveAvizReturnEmail(contractReferenceRaw) {
+    const normalizedContract = withoutDiacritics(contractReferenceRaw || '').toUpperCase();
+
+    // 1) Cuvant cheie de contract/client (ex: "NOVALIS") — mai specific decat
+    // un judet, asa ca se verifica primul si are prioritate. Un depozit cu
+    // cuvant cheie completat NU mai e luat in calcul mai jos, la potrivirea
+    // dupa judet — altfel doua depozite pe acelasi judet (ex: Depozit SIBIU
+    // si Depozit NOVALIS, ambele SB) s-ar calca in picioare, iar rezultatul
+    // ar depinde de ordinea intamplatoare in care sunt sincronizate local.
+    const keywordMatch = allDepots.find((d) => {
+      const keyword = (d.contractKeyword || '').trim();
+      if (!keyword || !(d.representativeEmail || '').trim()) return false;
+      return normalizedContract.includes(withoutDiacritics(keyword).toUpperCase());
+    });
+    if (keywordMatch) return keywordMatch.representativeEmail.trim();
+
+    // 2) Codul de judet mentionat in text — doar printre depozitele FARA
+    // cuvant cheie de contract (vezi mai sus).
     const code = matchCountyCodeInText(contractReferenceRaw);
     if (code) {
       if (SPECIAL_COUNTY_EMAILS[code]) return SPECIAL_COUNTY_EMAILS[code];
@@ -124,7 +142,10 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
       // sigur decat countyAbbreviation(d.name), care ramane doar ca fallback
       // pentru un depozit adaugat manual, local, fara sincronizare.
       const match = allDepots.find(
-        (d) => (d.countyCode || countyAbbreviation(d.name)) === code && (d.representativeEmail || '').trim()
+        (d) =>
+          !(d.contractKeyword || '').trim() &&
+          (d.countyCode || countyAbbreviation(d.name)) === code &&
+          (d.representativeEmail || '').trim()
       );
       if (match) return match.representativeEmail.trim();
     }
