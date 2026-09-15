@@ -206,6 +206,16 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
   const ciNumber = (model.beneficiaryCiNumber || '').trim().toUpperCase();
   const ciInactive = (!ciSeries && !ciNumber) || ciSeries === NA || ciNumber === NA;
   const showMissingPersonnelNote = ciInactive && !beneficiarySignatureUrl;
+  // Caseta "Mentiuni" e populata automat, niciodata scrisa de mana de sofer:
+  // - LIPSA PERSONAL cand nu exista nici CI beneficiar, nici semnatura (nimeni
+  //   prezent care sa preia/semneze PV-ul);
+  // - ZONA SECURIZATA / FOTO INTERZIS cand soferul a bifat "Zona securizata
+  //   (fara poza confirmare)" in aplicatie (model.secureAreaNoPhoto).
+  // Observatiile libere ale soferului au propria caseta mai jos
+  // (doc-observatii-sofer) si apar doar daca soferul chiar a scris ceva.
+  const mentiuni = [];
+  if (model.secureAreaNoPhoto) mentiuni.push('ZONA SECURIZATA / FOTO INTERZIS');
+  if (showMissingPersonnelNote) mentiuni.push('LIPSA PERSONAL');
   const valueClass = (v) => {
     const n = (v || '').trim().toUpperCase();
     return n === '' || n === NA ? 'doc-value-missing' : '';
@@ -247,8 +257,8 @@ function pageOnePv({ model, driver, isPreview, depotEmail, depotPhone, beneficia
         </div>
       </div>
       <div class="doc-box doc-box-obs">
-        <div class="doc-box-title center">Observatii:</div>
-        ${showMissingPersonnelNote ? '<div class="doc-value-missing doc-bold">LIPSA PERSONAL</div>' : '<div>-</div>'}
+        <div class="doc-box-title center">Mentiuni:</div>
+        ${mentiuni.length ? mentiuni.map((m) => `<div class="doc-value-missing doc-bold">${esc(m)}</div>`).join('') : '<div>-</div>'}
       </div>
     </div>
 
@@ -422,11 +432,7 @@ function photoPage({ model, index, photoUrl, depotEmail, depotPhone, pageIndex, 
     </div>
     <div class="doc-annex-title">${esc(anexaFotoTitle(model, index))}</div>
     <div class="doc-annex-photo-frame">
-      ${
-        photoUrl
-          ? `<img src="${photoUrl}" alt="" />`
-          : `<div class="doc-annex-placeholder"><div class="doc-bold doc-value-missing">ZONA SECURIZATA | FOTO INTERZIS</div><div>Conform observatiilor soferului, captura foto nu a putut fi realizata.</div></div>`
-      }
+      <img src="${photoUrl}" alt="" />
     </div>
     ${runningFooter(model, depotEmail, depotPhone, pageIndex, pageTotal)}
   </section>`;
@@ -450,9 +456,11 @@ export function buildDocumentHtml(params) {
   const depotEmail = (model.depotRepresentativeEmail || '').trim() || `${withoutDiacritics(model.depotName || '').toLowerCase().replace(/[^a-z0-9]+/g, '')}@eurowc.ro`;
   const depotPhone = (model.depotRepresentativePhone || '').trim() || '0735 214 762';
 
-  const soferObservations = (model.observatii || '').trim();
-  const showSecurePlaceholder = photoUrls.length === 0 && processTypeUpper !== 'LIPSA ACCES' && soferObservations.length > 0;
-  const annexUrls = photoUrls.length ? photoUrls : showSecurePlaceholder ? [null] : [];
+  // "Zona securizata (fara poza confirmare)" nu mai genereaza o pagina de
+  // anexa foto cu placeholder — pur si simplu nu exista nicio poza de anexat
+  // in acest caz, mentiunea corespunzatoare apare doar la "Mentiuni" pe
+  // pagina 1 (vezi pageOnePv / model.secureAreaNoPhoto).
+  const annexUrls = photoUrls;
   const pageTotal = 1 + (needsAviz ? 1 : 0) + annexUrls.length;
   let pageIndex = 0;
 

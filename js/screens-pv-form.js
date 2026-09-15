@@ -231,7 +231,6 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
       if (qty <= 0 || !hasAtLeastOneCompleteProduct()) m.add('productDetails');
       const hasPhoto = state.confirmationPhotos.length > 0;
       if (!hasPhoto && !state.secureAreaNoPhoto) m.add('confirmationPhoto');
-      if (!hasPhoto && state.secureAreaNoPhoto && !state.observatii.trim()) m.add('secureAreaReason');
       missing = m;
       showHints = true;
       return m;
@@ -240,7 +239,6 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
     function validationMessage(m) {
       if (m.has('productDetails')) return 'Completeaza cantitatea si toate produsele adaugate (model, tip, serie).';
       if (m.has('confirmationPhoto')) return 'Fara poza de confirmare nu poti continua.';
-      if (m.has('secureAreaReason')) return 'Completeaza observatiile cu motivul pentru zona securizata.';
       if (m.has('beneficiarySignature')) return 'Adauga semnatura beneficiarului.';
       return 'Completeaza campurile obligatorii marcate.';
     }
@@ -464,7 +462,6 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         const result = await openObservatiiEditor(state.observatii);
         if (result === undefined) return;
         state.observatii = result;
-        missing.delete('secureAreaReason');
         render();
       });
 
@@ -488,17 +485,16 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
 
       const secureCb = el('input', { type: 'checkbox' });
       secureCb.checked = state.secureAreaNoPhoto;
-      secureCb.addEventListener('change', async () => {
+      secureCb.addEventListener('change', () => {
         state.secureAreaNoPhoto = secureCb.checked;
         if (secureCb.checked) missing.delete('confirmationPhoto');
-        missing.delete('secureAreaReason');
-        if (secureCb.checked) {
-          const result = await openObservatiiEditor(state.observatii, true);
-          if (result !== undefined) state.observatii = result;
-        }
         render();
       });
-      const secureRow = el('label', { class: 'checkbox-row' }, [secureCb, el('div', {}, [el('div', { class: 'checkbox-label' }, ['Zona securizata (fara poza confirmare)']), el('div', { class: 'checkbox-sub' }, ['Daca bifezi, observatiile soferului devin obligatorii.'])])]);
+      // Bifarea asta nu mai cere soferului sa scrie observatii — mentiunea
+      // "ZONA SECURIZATA / FOTO INTERZIS" e adaugata automat in caseta
+      // "Mentiuni" de pe PV (vezi model.secureAreaNoPhoto in pdf-print.js),
+      // si nu se mai creeaza nicio pagina de anexa foto pentru acest caz.
+      const secureRow = el('label', { class: 'checkbox-row' }, [secureCb, el('div', {}, [el('div', { class: 'checkbox-label' }, ['Zona securizata (fara poza confirmare)']), el('div', { class: 'checkbox-sub' }, ['La PV va aparea automat, la Mentiuni: "Zona Securizata / Foto Interzis".'])])]);
 
       const maxPhotosReached = state.confirmationPhotos.length >= 5;
       const photoBtnError = showHints && missing.has('confirmationPhoto');
@@ -520,7 +516,6 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
       const children = [obsBtn, el('div', { style: 'height:12px' }), qtyField, groupsHost, addTypeBtn];
       if (showHints && missing.has('productDetails')) children.push(el('div', { class: 'hint-text' }, ['Completeaza cantitatea si toate produsele adaugate (model, tip, serie).']));
       if (photoBtnError) children.push(el('div', { class: 'hint-text' }, ['Poza de confirmare este obligatorie.']));
-      if (showHints && missing.has('secureAreaReason')) children.push(el('div', { class: 'hint-text' }, ['Completeaza Observatii cu motivul: zona securizata fara foto.']));
       children.push(photoBtn, secureRow, photosHost);
 
       return sectionCard('Detalii produs si poza de confirmare', children);
@@ -655,6 +650,7 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         field2: state.beneficiaryResponsible.trim(),
         field3: state.productQuantity.trim(),
         observatii: state.observatii.trim(),
+        secureAreaNoPhoto: state.secureAreaNoPhoto,
         confirmationPhotoUrls: annotatedPhotoUrls,
         gps: state.gps,
         confirmationTime: state.confirmationTime,
@@ -815,11 +811,11 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
   });
 }
 
-async function openObservatiiEditor(initialText, secureAreaMode = false) {
+async function openObservatiiEditor(initialText) {
   return pushScreen(({ pop }) => {
     const screen = el('div', { class: 'screen' });
-    screen.appendChild(el('div', { class: 'topbar' }, [el('button', { class: 'icon-btn', onclick: () => pop(undefined) }, ['←']), el('div', { class: 'topbar-title' }, [secureAreaMode ? 'Motiv zona securizata' : 'Observatii'])]));
-    const area = textAreaField({ label: secureAreaMode ? 'De ce nu se poate face poza?' : 'Observatii sofer', value: initialText, rows: 8 });
+    screen.appendChild(el('div', { class: 'topbar' }, [el('button', { class: 'icon-btn', onclick: () => pop(undefined) }, ['←']), el('div', { class: 'topbar-title' }, ['Observatii'])]));
+    const area = textAreaField({ label: 'Observatii sofer', value: initialText, rows: 8 });
     screen.appendChild(el('div', { class: 'screen-scroll' }, [area]));
     screen.appendChild(el('div', { class: 'bottom-actions' }, [primaryButton('Salveaza', () => pop(area.input.value))]));
     return screen;
