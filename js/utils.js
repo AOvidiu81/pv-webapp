@@ -4,7 +4,7 @@
 // Trebuie tinut manual sincron cu CACHE_VERSION din sw.js la fiecare
 // modificare — afisat pe ecranul de login/acasa ca soferul sa poata
 // confirma dintr-o privire ce versiune ruleaza pe telefon.
-export const APP_VERSION = 'v54';
+export const APP_VERSION = 'v55';
 
 // "Forteaza actualizarea" — echivalentul mobil al Ctrl+Shift+R de pe PC.
 // Pe telefon nu exista alta optiune de hard-refresh, iar un WebAPK Android
@@ -334,6 +334,104 @@ export function shrinkProductsTableToFit(root, { minFontSizePx = 7.6, minPadding
 
     pageEl.style.height = originalHeight;
     pageEl.style.overflow = originalOverflow;
+  });
+}
+
+/**
+ * Realoca dinamic latimile coloanelor BUC/MODEL PRODUS/TIP PRODUS/SERII din
+ * tabelul de produse, dupa continutul REAL al acestui P.V. — implicit
+ * (css/print.css), coloana SERII are fix 23% din latime, suficient doar
+ * pentru putine serii scurte; cu 5-6 serii pe un produs (soferul poate
+ * adauga oricate), textul ajungea sa se desparta la mijlocul unui cod (ex:
+ * "EE-333" pe un rand, "333" pe urmatorul) — greu de citit, desi nu se
+ * pierdea nimic (celula creste in inaltime, randul se adapteaza).
+ *
+ * Model si Tip Produs vin dintr-un catalog cu denumiri scurte, cunoscute
+ * dinainte (ex: "TOALETA", "CLASIC") — de obicei au nevoie de mult mai
+ * putin spatiu decat cele 22%+45% alocate implicit. Le micsoram la latimea
+ * lor naturala (continutul + antetul coloanei, plus o mica rezerva) si dam
+ * tot ce ramane coloanei Serii, unde chiar e nevoie de spatiu. Daca vreun
+ * Tip Produs e neobisnuit de lung, un plafon (maxFixedPercent) opreste
+ * BUC/MODEL/TIP sa inghita prea mult din tabel, ca Serii sa pastreze mereu
+ * un minim rezonabil (minSeriiPercent).
+ *
+ * Apelata INAINTE de shrinkProductsTableToFit() (in aceleasi 3 locuri:
+ * preview in-app, tiparire nativa, export PDF), ca micsorarea fontului —
+ * daca mai e nevoie, cu multe produse/serii — sa porneasca de la niste
+ * latimi de coloana deja corecte, nu de la cele 4 procente fixe.
+ */
+// Masoara latimea naturala (nescrisa pe mai multe randuri) a textului unei
+// celule, IZOLAT de tabel — daca am masura direct in interiorul tabelului
+// (ex: cell.scrollWidth cu white-space:nowrap), rezultatul ar depinde de
+// cum s-au asezat pana atunci CELELALTE coloane (motorul de layout "auto"
+// al tabelului rezolva toate coloanele impreuna), deci am putea subestima
+// nevoia reala. Clonam textul intr-un element separat, needependent de
+// tabel (aceleasi fonturi, dar fara nicio constrangere de latime), il
+// masuram, apoi il stergem.
+let measureSpan = null;
+function measureTextWidth(text, computedStyle) {
+  if (!measureSpan) {
+    measureSpan = document.createElement('span');
+    measureSpan.style.position = 'absolute';
+    measureSpan.style.visibility = 'hidden';
+    measureSpan.style.left = '-9999px';
+    measureSpan.style.top = '0';
+    measureSpan.style.whiteSpace = 'nowrap';
+    document.body.appendChild(measureSpan);
+  }
+  measureSpan.style.fontFamily = computedStyle.fontFamily;
+  measureSpan.style.fontSize = computedStyle.fontSize;
+  measureSpan.style.fontWeight = computedStyle.fontWeight;
+  measureSpan.style.letterSpacing = computedStyle.letterSpacing;
+  measureSpan.textContent = text;
+  return measureSpan.getBoundingClientRect().width;
+}
+
+export function balanceProductsTableColumns(root, { minSeriiPercent = 0.28, maxFixedPercent = 0.55 } = {}) {
+  if (!root) return;
+  root.querySelectorAll('.doc-products-table').forEach((table) => {
+    const colClasses = ['col-buc', 'col-model', 'col-tip'];
+    const groups = colClasses.map((cls) => Array.from(table.querySelectorAll(`.${cls}`)));
+    const seriiCells = Array.from(table.querySelectorAll('.col-serii'));
+    if (groups.some((g) => !g.length) || !seriiCells.length) return;
+
+    // Reset — un preview redeschis dupa o corectie nu trebuie sa porneasca
+    // de la latimile calculate la randarea anterioara.
+    [...groups.flat(), ...seriiCells].forEach((cell) => { cell.style.width = ''; });
+
+    const tableWidth = table.clientWidth;
+    if (!tableWidth) return;
+
+    // Padding orizontal existent al celulelor (stanga+dreapta) — vezi
+    // ".doc-table th, .doc-table td" in print.css (2mm pe fiecare parte) —
+    // plus o rezerva mica suplimentara (border-ul celulei + eventuale
+    // rotunjiri sub-pixel intre masuratoarea offscreen si randarea reala in
+    // tabel, care altfel pot face textul sa treaca pe randul urmator chiar
+    // daca in teorie "abia" incapea).
+    const cellPaddingH = 2 * 2 * (96 / 25.4); // 2mm * 2 laturi, convertit in px
+    const safetyBuffer = 8;
+
+    const naturalWidths = groups.map((cells) =>
+      cellPaddingH +
+      safetyBuffer +
+      cells.reduce((max, cell) => {
+        const w = measureTextWidth(cell.textContent, window.getComputedStyle(cell));
+        return Math.max(max, w);
+      }, 0)
+    );
+
+    let fixedTotal = naturalWidths.reduce((a, b) => a + b, 0);
+    const maxFixedTotal = tableWidth * maxFixedPercent;
+    const scale = fixedTotal > maxFixedTotal ? maxFixedTotal / fixedTotal : 1;
+    fixedTotal = Math.min(fixedTotal, maxFixedTotal);
+
+    groups.forEach((cells, i) => {
+      const w = naturalWidths[i] * scale;
+      cells.forEach((cell) => { cell.style.width = `${w}px`; });
+    });
+
+    const seriiWidth = Math.max(tableWidth * minSeriiPercent, tableWidth - fixedTotal);
+    seriiCells.forEach((cell) => { cell.style.width = `${seriiWidth}px`; });
   });
 }
 

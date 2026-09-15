@@ -134,10 +134,19 @@
 .doc-table-frame-green .doc-table td { border-color: var(--doc-green-border); }
 .doc-table-frame-green .doc-table thead th { background: var(--doc-green-light); color: var(--doc-green); }
 .doc-table td.center, .doc-table th.center { text-align: center; }
+/* Latimi implicite (fallback daca JS nu a apucat sa ruleze) — in mod normal
+   sunt suprascrise dinamic de balanceProductsTableColumns() din utils.js,
+   dupa continutul real al PV-ului curent (Model/Tip iau doar cat au nevoie,
+   Serii primeste tot ce ramane). */
 .doc-products-table .col-buc { width: 10%; }
 .doc-products-table .col-model { width: 22%; }
 .doc-products-table .col-tip { width: 45%; }
 .doc-products-table .col-serii { width: 23%; }
+/* Un cod de serie (ex: "EE-333333") nu se rupe niciodata in mijloc cand
+   celula Serii se imparte pe mai multe randuri vizuale — vezi
+   formatSeriesCell() din pdf-print.js. Ruptura poate cadea doar intre
+   coduri, dupa "; ". */
+.doc-series-token { white-space: nowrap; }
 
 .doc-confirmation-banner {
   margin-top: 3mm;

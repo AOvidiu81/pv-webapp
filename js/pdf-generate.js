@@ -15,7 +15,7 @@
 // Acest PDF poate fi apoi trimis direct din aplicatie (Web Share API) catre
 // WhatsApp sau orice alta aplicatie de pe telefon — vezi shareOrDownloadPdf().
 
-import { blobToDataUrl, shrinkTextToFitOneLine, shrinkProductsTableToFit, waitForImagesLoaded } from './utils.js';
+import { blobToDataUrl, shrinkTextToFitOneLine, shrinkProductsTableToFit, balanceProductsTableColumns, waitForImagesLoaded } from './utils.js';
 
 const A4_PT = { w: 595.28, h: 841.89 }; // 210mm x 297mm, in puncte (1pt = 1/72in)
 
@@ -142,6 +142,11 @@ export async function renderDocPagesToJpegs(html, { scale = 1.6, quality = 0.85 
     // sa evitam un import circular (pdf-print.js importa deja din acest
     // fisier).
     host.querySelectorAll('.doc-return-message').forEach((elx) => shrinkTextToFitOneLine(elx));
+    // Latimile coloanelor BUC/MODEL/TIP/SERII se realoca dupa continutul
+    // real al acestui PV (Model/Tip iau doar cat au nevoie, Serii primeste
+    // restul) INAINTE de micsorarea fontului de mai jos — vezi
+    // balanceProductsTableColumns() in utils.js.
+    balanceProductsTableColumns(host);
     // Daca beneficiarul are multe categorii de produse, tabelul se
     // micsoreaza (font + padding pe randuri) cat sa incapa TOT pe cele
     // 297mm fixe de mai sus — altfel randurile care depasesc inaltimea

@@ -17,6 +17,7 @@ import {
   fileToken,
   shrinkTextToFitOneLine,
   shrinkProductsTableToFit,
+  balanceProductsTableColumns,
   waitForImagesLoaded,
 } from './utils.js';
 import { CONDITIONS_BY_TYPE, COMPANY_INFO, confirmationBanner } from './catalog-defaults.js';
@@ -57,13 +58,24 @@ function withSeriesPrefix(raw) {
 
 /** Randeaza lista de serii ale unui produs ca text cu delimitator "; ",
  * maxim 6 serii pe linie — grupele suplimentare de 6 trec pe randul urmator
- * (in interiorul aceleiasi celule din tabel). */
+ * (in interiorul aceleiasi celule din tabel). Fiecare cod de serie e
+ * infasurat intr-un span "doc-series-token" (white-space:nowrap in
+ * print.css) — daca celula nu are destul loc pe orizontala (vezi
+ * balanceProductsTableColumns() din utils.js) si randul se imparte automat
+ * pe mai multe linii vizuale, ruptura poate cadea DOAR intre coduri
+ * (dupa "; "), niciodata in mijlocul unui cod (ex: "EE-333" pe un rand,
+ * "333" pe urmatorul, ca inainte). */
 function formatSeriesCell(seriesList) {
   if (!seriesList.length) return '-';
   const withPrefix = seriesList.map(withSeriesPrefix);
   const lines = [];
   for (let i = 0; i < withPrefix.length; i += 6) {
-    lines.push(withPrefix.slice(i, i + 6).map(esc).join('; '));
+    lines.push(
+      withPrefix
+        .slice(i, i + 6)
+        .map((s) => `<span class="doc-series-token">${esc(s)}</span>`)
+        .join('; ')
+    );
   }
   return lines.join('<br>');
 }
@@ -101,16 +113,22 @@ function avizRows(model) {
     // La fel ca in tabelul de produse de pe pagina PV (formatSeriesCell,
     // care aplica withSeriesPrefix), seriile trebuie afisate cu prefixul
     // "EE-" si in tabelul Aviz — inainte, aici se afisa doar partea
-    // variabila tastata de sofer (ex: "S23" in loc de "EE-S23").
-    const seriesFormatted = seriesGroup.split(',').map((s) => s.trim()).filter(Boolean).map(withSeriesPrefix).join(', ');
-    const baseDenumire = split.type ? `${split.model} - ${split.type}` : split.model;
-    const denumire = seriesFormatted ? `${baseDenumire} | ${seriesFormatted}` : baseDenumire;
-    const cant = seriesFormatted
-      ? seriesGroup.split(',').filter((s) => s.trim()).length
+    // variabila tastata de sofer (ex: "S23" in loc de "EE-S23"). Fiecare cod
+    // e infasurat intr-un span "doc-series-token" (white-space:nowrap), ca
+    // sa nu se rupa niciodata in mijloc daca randul se imparte pe mai multe
+    // linii vizuale — la fel ca in tabelul de produse (vezi formatSeriesCell
+    // mai sus). "denumire" e deja HTML sigur (piesele dinamice sunt escapate
+    // individual mai jos), deci NU se mai trece prin esc() la randare.
+    const seriesTokens = seriesGroup.split(',').map((s) => s.trim()).filter(Boolean).map(withSeriesPrefix);
+    const seriesFormattedHtml = seriesTokens.map((s) => `<span class="doc-series-token">${esc(s)}</span>`).join(', ');
+    const baseDenumireHtml = split.type ? `${esc(split.model)} - ${esc(split.type)}` : esc(split.model);
+    const denumireHtml = seriesFormattedHtml ? `${baseDenumireHtml} | ${seriesFormattedHtml}` : baseDenumireHtml;
+    const cant = seriesTokens.length
+      ? seriesTokens.length
       : i === 0 && !isNaN(qty) && qty !== 0
       ? Math.abs(qty)
       : 1;
-    rows.push([String(i + 1), denumire, 'BUC', String(cant)]);
+    rows.push([String(i + 1), denumireHtml, 'BUC', String(cant)]);
   });
   if (!rows.length) rows.push(['1', '-', 'BUC', '1']);
   return rows;
@@ -344,7 +362,7 @@ function pageTwoAviz({ model, depotEmail, depotPhone, beneficiarySignatureUrl, d
 
     <table class="doc-table doc-aviz-table">
       <thead><tr><th class="col-nr">Nr.</th><th>Denumire produs</th><th class="col-um">U.M.</th><th class="col-cant">Cantitate</th></tr></thead>
-      <tbody>${rows.map((r) => `<tr><td class="center">${esc(r[0])}</td><td>${esc(r[1])}</td><td class="center">${esc(r[2])}</td><td class="center">${esc(r[3])}</td></tr>`).join('')}</tbody>
+      <tbody>${rows.map((r) => `<tr><td class="center">${esc(r[0])}</td><td>${r[1]}</td><td class="center">${esc(r[2])}</td><td class="center">${esc(r[3])}</td></tr>`).join('')}</tbody>
     </table>
 
     <div class="doc-box doc-no-transport">PRODUSELE TRANSPORTATE SUNT FARA VALOARE DE TRANSPORT (NU SE FACTUREAZA).</div>
@@ -488,6 +506,7 @@ export async function printDocument(html, suggestedTitle) {
   // exact cand avem nevoie sa masuram/ajustam.
   const onBeforePrint = () => {
     fitReturnMessages(printRoot);
+    balanceProductsTableColumns(printRoot);
     shrinkProductsTableToFit(printRoot);
   };
   window.addEventListener('beforeprint', onBeforePrint);
@@ -525,6 +544,7 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
   // altfel, daca textul rosu s-ar micsora DUPA masuratoare, inaltimea
   // paginii calculata aici ar ramane cea veche (cu 2 randuri), gresita.
   fitReturnMessages(measureHost);
+  balanceProductsTableColumns(measureHost);
   shrinkProductsTableToFit(measureHost);
   const sourcePages = Array.from(measureHost.querySelectorAll('.doc-page'));
 
