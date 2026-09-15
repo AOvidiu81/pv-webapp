@@ -319,6 +319,11 @@ export async function syncMasterData(profile) {
       signatureDataUrl: profile.signature_url || '',
       nrContract: profile.nr_contract || '',
       dataAngajare: profile.data_angajare || '',
+      // Depozitul la care e alocat soferul, setat din admin (tab Soferi) —
+      // foloseste acelasi format de cheie locala ca DepotRepo ("synced-<id>"),
+      // ca ecranul de acasa (screens-home.js) sa il poata gasi direct in
+      // lista de depozite sincronizate, fara sa mai fie ales manual.
+      depotId: profile.depot_id ? 'synced-' + profile.depot_id : '',
       sortOrder: 0,
     });
     // Soferii/masinile/depozitele nu mai sunt gestionate local (vezi

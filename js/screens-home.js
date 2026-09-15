@@ -6,7 +6,7 @@ import { el, formatDateRo, weekdayLabelRo, vechimeLabel, APP_VERSION, forceUpdat
 import { pushScreen } from './router.js';
 import { DriverRepo, CarRepo, DepotRepo } from './db.js';
 import { getCurrentProfile, syncMasterData } from './auth.js';
-import { selectField, sectionCard, primaryButton, showToast, tile } from './components.js';
+import { selectField, textField, sectionCard, primaryButton, showToast, tile } from './components.js';
 import { openSettingsScreen } from './screens-setup.js';
 import { PROCESS_TYPES, COMPANY_INFO } from './catalog-defaults.js';
 import { openProcessVerbalForm } from './screens-pv-form.js';
@@ -73,6 +73,23 @@ export async function openMainSelector() {
       }
     }
 
+    // Depozitul NU mai e ales manual dintr-o lista — asta ducea la confuzii
+    // (soferul putea crea un P.V. cu alt depozit decat cel corect, doar
+    // pentru ca acela aparea primul in lista, in ordine alfabetica/de
+    // sincronizare, nicidecum dupa vreo alocare reala). Acum se afiseaza
+    // automat, needitabil, depozitul la care e alocat soferul curent, asa
+    // cum e setat din admin (tab Soferi) — vezi si depotId din auth.js.
+    // Daca soferul nu are inca niciun depozit alocat (rar — de ex. un cont
+    // nou, inainte sa fie configurat din admin), se foloseste depozitul
+    // Principal ca implicit, nu primul din lista la intamplare.
+    function resolveDepotForDriver(driver) {
+      if (driver?.depotId) {
+        const match = depots.find((d) => d.id === driver.depotId);
+        if (match) return match;
+      }
+      return depots.find((d) => d.depotType === 'principal') || depots[0] || null;
+    }
+
     function renderForm() {
       form.innerHTML = '';
       if (!drivers.length || !cars.length || !depots.length) {
@@ -80,12 +97,15 @@ export async function openMainSelector() {
         continueBtn.disabled = true;
         return;
       }
+      const depotDisplay = textField({ label: 'Depozit', value: selectedDepot?.name || '-', readOnly: true });
       const driverSelect = selectField({
         label: 'Sofer',
         value: selectedDriver?.id,
         options: drivers.map((d) => ({ value: d.id, label: d.name })),
         onChange: (val) => {
           selectedDriver = drivers.find((d) => String(d.id) === String(val));
+          selectedDepot = resolveDepotForDriver(selectedDriver);
+          depotDisplay.input.value = selectedDepot?.name || '-';
           renderInfoCard();
         },
       });
@@ -97,18 +117,9 @@ export async function openMainSelector() {
           selectedCar = cars.find((c) => String(c.id) === String(val));
         },
       });
-      const depotSelect = selectField({
-        label: 'Depozit',
-        value: selectedDepot?.id,
-        options: depots.map((d) => ({ value: d.id, label: d.name })),
-        onChange: (val) => {
-          selectedDepot = depots.find((d) => String(d.id) === String(val));
-          renderInfoCard();
-        },
-      });
       form.appendChild(driverSelect);
       form.appendChild(carSelect);
-      form.appendChild(depotSelect);
+      form.appendChild(depotDisplay);
       continueBtn.disabled = false;
     }
 
@@ -135,7 +146,7 @@ export async function openMainSelector() {
       [drivers, cars, depots] = await Promise.all([DriverRepo.getAll(), CarRepo.getAll(), DepotRepo.getAll()]);
       selectedDriver = drivers.find((d) => d.id === selectedDriver?.id) || drivers[0] || null;
       selectedCar = cars.find((c) => c.id === selectedCar?.id) || cars[0] || null;
-      selectedDepot = depots.find((d) => d.id === selectedDepot?.id) || depots[0] || null;
+      selectedDepot = resolveDepotForDriver(selectedDriver);
       renderForm();
       renderInfoCard();
     }
