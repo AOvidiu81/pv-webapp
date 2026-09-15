@@ -864,6 +864,13 @@ export async function gpsAccuracyGate() {
     // mutat cu adevarat (>25m) sau la prima pozitie primita.
     let geocoding = false;
     let lastGeocodedAt = null; // {lat, lon}
+    // Ultima adresa (Jud./Localitate/Strada) rezolvata cu succes de Nominatim
+    // pe acest ecran — pastrata aici ca sa poata fi intoarsa catre apelant
+    // (vezi stopAndPop), pentru bannerul ars pe poza de confirmare
+    // (photoOverlayLines din screens-pv-form.js). Ramane null daca soferul
+    // nu are semnal/internet sau geocodarea nu s-a incheiat la timp — in
+    // acel caz apelantul cade automat inapoi pe adresa scrisa de mana.
+    let lastGeocodedLabel = null;
 
     async function updateLocationLine(position) {
       const { latitude, longitude } = position.coords;
@@ -875,6 +882,7 @@ export async function gpsAccuracyGate() {
         if (label === null) return; // throttled — reincercam la urmatorul update
         lastGeocodedAt = { lat: latitude, lon: longitude };
         if (label) {
+          lastGeocodedLabel = label;
           locationLine.textContent = `${label} · sursa: OpenStreetMap`;
           locationLine.style.display = '';
         }
@@ -930,7 +938,11 @@ export async function gpsAccuracyGate() {
 
     function stopAndPop(position) {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-      pop(position);
+      // geocodedLabel poate fi null (fara semnal/internet in acel moment, sau
+      // Nominatim nu a apucat sa raspunda) — apelantul (onCapturePhoto din
+      // screens-pv-form.js) trateaza null exact ca "GPS indisponibil": cade
+      // inapoi pe adresa scrisa de mana de sofer la Locatie.
+      pop({ position, geocodedLabel: lastGeocodedLabel });
     }
 
     if ('geolocation' in navigator) {

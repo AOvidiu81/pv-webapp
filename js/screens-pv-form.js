@@ -204,6 +204,12 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
       productEntries: [newProductEntry()],
       confirmationPhotos: [], // { rawBlob, previewUrl }
       gps: '',
+      // Adresa dedusa din coordonatele GPS (Jud./Localitate/Strada, via
+      // Nominatim — vezi gpsAccuracyGate in components.js), folosita DOAR in
+      // bannerul ars pe poza de confirmare (photoOverlayLines mai jos).
+      // Pretutindeni altundeva in PV (Locatia ceruta, Anexa Foto, Aviz,
+      // fisier, admin) ramane adresa scrisa de sofer in comanda — neschimbata.
+      gpsAddress: '',
       confirmationTime: '',
       beneficiarySignatureBlob: null,
       beneficiarySignatureUrl: '',
@@ -612,11 +618,20 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         const file = await captureCameraPhoto();
         if (!file) return;
         let coordsLabel = 'GPS indisponibil';
-        if (gpsResult && gpsResult !== 'skip' && gpsResult.coords) {
-          const { latitude, longitude } = gpsResult.coords;
+        let gpsAddressLabel = '';
+        // gpsAccuracyGate() intoarce 'skip' daca soferul a sarit peste
+        // verificarea GPS (semnal absent/slab) — in acel caz nu avem nici
+        // coordonate, nici adresa dedusa, si ramanem pe fallback-ul de mai
+        // jos (adresa scrisa de mana). Altfel intoarce { position,
+        // geocodedLabel } — geocodedLabel poate fi null daca soferul nu a
+        // avut internet in acel moment sau Nominatim n-a apucat sa raspunda.
+        if (gpsResult && gpsResult !== 'skip' && gpsResult.position?.coords) {
+          const { latitude, longitude } = gpsResult.position.coords;
           coordsLabel = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          gpsAddressLabel = gpsResult.geocodedLabel || '';
         }
         state.gps = coordsLabel;
+        state.gpsAddress = gpsAddressLabel;
         state.confirmationTime = formatDateTimeRo();
         const previewUrl = await blobToDataUrl(file);
         state.confirmationPhotos.push({ rawBlob: file, previewUrl });
@@ -677,7 +692,14 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         productLines.length ? `Produse: ${productLines.join(', ')}` : null,
         `Data: ${formatDateTimeRo()}`,
         state.gps ? `GPS: ${state.gps}` : null,
-        `Adresa: ${state.field1.trim()}`,
+        // In banner adresa vine din pozitia GPS reala a telefonului la
+        // momentul pozei (dedusa via Nominatim, vezi gpsAccuracyGate) — NU
+        // din adresa scrisa de sofer in comanda. Cade inapoi pe adresa
+        // scrisa de mana (state.field1) doar daca soferul nu a avut
+        // semnal/internet in acel moment. Peste tot altundeva in PV
+        // (Locatia ceruta, Anexa Foto, Aviz, fisier, admin) adresa ramane
+        // exact cea scrisa in comanda, neschimbata.
+        `Adresa: ${state.gpsAddress || state.field1.trim()}`,
         `Sofer: ${driver.name} | Auto: ${car.numar}`,
         avzLabel ? `Nr PV: ${pvLabel} | Nr AVZ: ${avzLabel}` : `Nr PV: ${pvLabel}`,
       ];
