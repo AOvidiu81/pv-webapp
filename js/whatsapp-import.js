@@ -29,6 +29,67 @@ function matchLabel(lines, labelPattern) {
   return '';
 }
 
+// ---------------------------------------------------------------------
+// Adresa (Judet/Localitate/Strada) — spre deosebire de celelalte campuri
+// (NUME CL, TEL, CTR etc.), care apar mereu pe o singura linie cu o
+// eticheta fixa, adresa vine de obicei pe mai multe linii consecutive, iar
+// eticheta fiecarei linii variaza destul de mult intre comenzi (JUD/LOC/STR,
+// dar si COMUNA/SAT/ORAS/CARTIER, sau uneori fara nicio eticheta deloc —
+// doar textul liber). Daca am cauta doar JUD/LOC/STR ca mai sus, orice
+// varianta care nu respecta exact acel format se pierde complet.
+//
+// In loc sa incercam sa recunoastem fiecare eticheta posibila, luam TOT
+// blocul de linii dintre "NUME CL" si urmatoarea eticheta cunoscuta
+// (PERS. RES / TEL / CTR / SERVISARE / DEP) — indiferent cum e eticheta
+// fiecarei linii din acel bloc — si le unim pe toate. Astfel, chiar si o
+// linie complet nerecunoscuta ("SAT ...", "vis-a-vis de Primarie" etc.)
+// ajunge in adresa, nu se mai pierde niciodata.
+const ADDRESS_LINE_PATTERNS = [
+  // Judet — pastram prefixul "Jud. XX", ca pe formular
+  { re: /^\s*JUD(?:ET)?\s*\.?\s*:?\s*[:\-]?\s*(.+)$/i, format: (v) => `Jud. ${v.trim().toUpperCase()}` },
+  // Localitate / oras / comuna / sat — toate sunt aceeasi pozitie in
+  // adresa, doar denumiri diferite ale aceleiasi etichete
+  { re: /^\s*(?:LOC(?:ALITATE)?|ORAS|COMUNA|SAT)\s*\.?\s*:?\s*[:\-]?\s*(.+)$/i, format: (v) => v.trim() },
+  // Strada / cartier / zona
+  { re: /^\s*(?:STR(?:ADA)?|CARTIER|ZONA)\s*\.?\s*:?\s*[:\-]?\s*(.+)$/i, format: (v) => v.trim() },
+];
+
+function formatAddressLine(line) {
+  for (const { re, format } of ADDRESS_LINE_PATTERNS) {
+    const m = re.exec(line);
+    if (m && m[1] && m[1].trim()) return format(m[1]);
+  }
+  // eticheta nerecunoscuta (sau fara eticheta) -> pastram linia intreaga
+  // asa cum e, ca nimic din blocul de adresa sa nu se piarda
+  return line.trim();
+}
+
+const CLIENT_LABEL_RE = /^\s*NUME\s*CL(?:IENT)?\s*\.?\s*:?/i;
+const OTHER_LABEL_RE = /^\s*(?:PERS\.?\s*RES(?:PONSABILA)?|RESPONSABIL|TEL(?:EFON)?|CTR|CONTRACT|SERVISARE|DEP(?:OZIT)?)\s*\.?\s*:?/i;
+// Prima linie a comenzii e de obicei tipul de PV + data ("AMPLASARE
+// 15/09/2026") — daca nu exista deloc "NUME CL" in text, nu vrem sa
+// inghitim din greseala aceasta linie in blocul de adresa.
+const HEADER_LINE_RE = /^\s*(?:AMPLASARE|RIDICARE|SERVISARE|LIPSA\s*ACCES|VANZARE)\b/i;
+
+function extractAddressBlock(lines) {
+  let start = HEADER_LINE_RE.test(lines[0] || '') ? 1 : 0;
+  const clientIdx = lines.findIndex((l) => CLIENT_LABEL_RE.test(l));
+  if (clientIdx >= start) start = clientIdx + 1;
+
+  let end = lines.length;
+  for (let i = start; i < lines.length; i++) {
+    if (OTHER_LABEL_RE.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  return lines
+    .slice(start, end)
+    .map(formatAddressLine)
+    .filter(Boolean)
+    .join(', ');
+}
+
 /** Extrage campurile cunoscute dintr-un text liber de tip comanda WhatsApp.
  * Intoarce un obiect cu proprietati goale ("") pentru ce nu s-a gasit —
  * apelantul decide ce campuri suprascrie in formular. */
@@ -39,9 +100,7 @@ export function parseWhatsAppOrderText(rawText) {
     .filter(Boolean);
 
   const clientName = matchLabel(lines, 'NUME\\s*CL(?:IENT)?');
-  const jud = matchLabel(lines, 'JUD(?:ET)?');
-  const loc = matchLabel(lines, 'LOC(?:ALITATE)?');
-  const str = matchLabel(lines, 'STR(?:ADA)?');
+  const address = extractAddressBlock(lines);
   const persRes = matchLabel(lines, 'PERS\\.?\\s*RES(?:PONSABILA)?|RESPONSABIL');
   const tel = matchLabel(lines, 'TEL(?:EFON)?');
   const ctr = matchLabel(lines, 'CTR|CONTRACT');
@@ -59,7 +118,7 @@ export function parseWhatsAppOrderText(rawText) {
     }
   }
 
-  return { clientName, jud, loc, str, persRes, tel, ctr, servisare, dep, productQty, productText };
+  return { clientName, address, persRes, tel, ctr, servisare, dep, productQty, productText };
 }
 
 /** Deschide un dialog cu o zona de text unde soferul lipeste mesajul de

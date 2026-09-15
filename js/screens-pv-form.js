@@ -540,12 +540,8 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         missing.delete('clientName');
         anyField = true;
       }
-      const addressParts = [];
-      if (parsed.jud) addressParts.push(`Jud. ${parsed.jud.toUpperCase()}`);
-      if (parsed.loc) addressParts.push(parsed.loc);
-      if (parsed.str) addressParts.push(parsed.str);
-      if (addressParts.length) {
-        state.field1 = addressParts.join(', ');
+      if (parsed.address) {
+        state.field1 = parsed.address;
         missing.delete('field1');
         anyField = true;
       }
