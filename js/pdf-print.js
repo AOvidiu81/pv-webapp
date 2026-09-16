@@ -6,9 +6,6 @@
 // mai "premium" (tipografie, culori, spatiere).
 
 import {
-  countyAbbreviation,
-  extractCountyFromAddress,
-  extractLocationFromAddress,
   formatDateRo,
   shortDriverName,
   weekdayLabelRo,
@@ -135,12 +132,16 @@ function avizRows(model) {
 }
 
 function anexaFotoTitle(model, index) {
+  // Adresa apare EXACT cum a scris-o soferul (model.field1), fara nicio
+  // extragere/abreviere de judet — inainte titlul incerca sa deduca separat
+  // localitatea si judetul din text, si daca adresa nu continea explicit
+  // "Jud." (ex: Bucuresti cu Sector, sau comuna/sat fara acel cuvant), cadea
+  // pe judetul DEPOZITULUI soferului, nu pe cel real al adresei. Vezi si
+  // "Adresa:" din banner-ul pozei (photoOverlayLines, screens-pv-form.js),
+  // care e singurul loc unde adresa NU vine din comanda, ci din GPS.
   const client = (model.clientName || '').trim() || 'BENEFICIAR';
-  const locationRaw = extractLocationFromAddress(model.field1);
-  const location = locationRaw || 'LOCATIE NECUNOSCUTA';
-  const countyRaw = extractCountyFromAddress(model.field1);
-  const countyShort = countyAbbreviation(countyRaw || model.depotName);
-  return `ANEXA FOTO ${index} : ${withoutDiacritics(client).toUpperCase()}, ${withoutDiacritics(location).toUpperCase()}, [${countyShort}]`;
+  const address = (model.field1 || '').trim() || 'ADRESA NECUNOSCUTA';
+  return `ANEXA FOTO ${index} : ${withoutDiacritics(client).toUpperCase()}, ${withoutDiacritics(address).toUpperCase()}`;
 }
 
 function docDateTime(iso) {

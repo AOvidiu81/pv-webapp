@@ -560,11 +560,12 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
         state.contractReference = parsed.ctr;
         anyField = true;
       }
-      if (parsed.servisare) {
-        const note = `Servisare: ${parsed.servisare}`;
-        state.observatii = state.observatii.trim() ? `${state.observatii.trim()}\n${note}` : note;
-        anyField = true;
-      }
+      // NU mai scriem "Servisare: X" in Observatii la import — caseta
+      // "OBSERVATII SOFER" de pe PV trebuie sa ramana activa STRICT cand
+      // soferul chiar adauga observatii proprii (butonul "Adauga
+      // observatii"), nu cand un camp din comanda a fost parsat automat.
+      // parsed.servisare ramane disponibil in obiectul intors de parser
+      // pentru eventuale utilizari viitoare, dar nu mai atinge state.observatii.
       if (parsed.productQty && parsed.productQty > 0) {
         state.productQuantity = String(parsed.productQty);
         const first = state.productEntries[0];

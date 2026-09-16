@@ -545,6 +545,14 @@ function captureSignatureScreen(title) {
   // indiferent cum iese soferul din el (buton, salvare sau Back hardware) —
   // vezi promise.finally() mai jos.
   let resizeObserver = null;
+  // Forteaza o rezolutie de captura de minim 2x, chiar daca telefonul
+  // raporteaza devicePixelRatio 1 (unele WebView-uri Android mai vechi/low-
+  // end fac asta) — cerneala e desenata mereu la fel de detaliat, indiferent
+  // de ecranul soferului, ca semnatura sa iasa clar la marimea tiparita pe
+  // PV (mica, ~14mm), nu pixelata. Calculat o singura data, folosit identic
+  // si la resize() (backing store-ul canvas-ului), si la save() (decupare),
+  // ca sa ramana in sincron.
+  const CAPTURE_RATIO = Math.max(window.devicePixelRatio || 1, 2);
   const promise = pushScreen(({ pop }) => {
     const canvasWrap = el('div', { class: 'signature-canvas-wrap' });
     const canvas = el('canvas', { class: 'signature-canvas' });
@@ -614,7 +622,7 @@ function captureSignatureScreen(title) {
       if (Math.abs(w - lastW) < 0.5 && Math.abs(h - lastH) < 0.5) return;
       lastW = w;
       lastH = h;
-      const ratio = window.devicePixelRatio || 1;
+      const ratio = CAPTURE_RATIO;
       canvas.width = w * ratio;
       canvas.height = h * ratio;
       canvas.style.width = w + 'px';
@@ -664,6 +672,14 @@ function captureSignatureScreen(title) {
     // unui pix real. Grosimea fiecarui segment depinde de distanta parcursa
     // (nu de numarul de puncte), ca desenul sa arate la fel indiferent cat
     // de repede/rar a trimis browserul evenimentele pointermove.
+    //
+    // Trasa e desenata ca o succesiune de curbe quadratice prin mijloacele
+    // punctelor brute consecutive (fiecare punct brut devine punctul de
+    // control al curbei dintre mijlocul precedent si urmatorul) — o tehnica
+    // standard de "smoothing" pentru desen liber, care elimina aspectul
+    // "franturat"/in trepte vizibil cand punctele brute de la pointermove
+    // sunt rare (degete rapide sau ecrane cu rata de esantionare mai mica),
+    // fara sa schimbe deloc traseul urmarit de sofer.
     function drawTaperedStroke(pts) {
       if (pts.length < 2) return;
       const dist = [0];
@@ -672,15 +688,37 @@ function captureSignatureScreen(title) {
       }
       const totalLen = dist[dist.length - 1];
       const taper = Math.min(PEN_TAPER_PX, totalLen / 2.2);
-      for (let i = 1; i < pts.length; i++) {
-        const midDist = (dist[i - 1] + dist[i]) / 2;
-        const factor = taper > 0 ? Math.min(1, Math.min(midDist, totalLen - midDist) / taper) : 1;
-        ctx.lineWidth = PEN_MIN_WIDTH + (PEN_MAX_WIDTH - PEN_MIN_WIDTH) * factor;
+      const widthAt = (d) => {
+        const factor = taper > 0 ? Math.min(1, Math.min(d, totalLen - d) / taper) : 1;
+        return PEN_MIN_WIDTH + (PEN_MAX_WIDTH - PEN_MIN_WIDTH) * factor;
+      };
+      if (pts.length === 2) {
+        // doar 2 puncte -- nu exista punct de control pentru o curba, ramane
+        // o linie dreapta simpla (deja neteda, nu are ce sa se "franga")
+        ctx.lineWidth = widthAt(dist[1] / 2);
         ctx.beginPath();
-        ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
-        ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.moveTo(pts[0].x, pts[0].y);
+        ctx.lineTo(pts[1].x, pts[1].y);
         ctx.stroke();
+        return;
       }
+      const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      let prevMid = pts[0];
+      for (let i = 1; i < pts.length - 1; i++) {
+        const nextMid = mid(pts[i], pts[i + 1]);
+        ctx.lineWidth = widthAt(dist[i]);
+        ctx.beginPath();
+        ctx.moveTo(prevMid.x, prevMid.y);
+        ctx.quadraticCurveTo(pts[i].x, pts[i].y, nextMid.x, nextMid.y);
+        ctx.stroke();
+        prevMid = nextMid;
+      }
+      // ultimul segment: de la ultimul mijloc pana la ultimul punct brut
+      ctx.lineWidth = widthAt(totalLen);
+      ctx.beginPath();
+      ctx.moveTo(prevMid.x, prevMid.y);
+      ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      ctx.stroke();
     }
     // Reface tot desenul (toate trasele) din memorie, cu afinare la capete.
     // Apelata doar la finalul fiecarei trase (pointerup) — cat timp degetul
@@ -744,7 +782,7 @@ function captureSignatureScreen(title) {
       // Decupam semnatura la conturul cernelii desenate (+ un mic padding),
       // in loc sa exportam tot canvas-ul gol in jur — ca imaginea rezultata
       // sa aiba proportia semnaturii reale.
-      const ratio = window.devicePixelRatio || 1;
+      const ratio = CAPTURE_RATIO;
       const PAD = 14; // padding, in pixeli CSS
       const cssW = canvas.width / ratio;
       const cssH = canvas.height / ratio;
