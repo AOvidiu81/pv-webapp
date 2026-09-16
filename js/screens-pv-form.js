@@ -794,7 +794,7 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
 
         const html = buildDocumentHtml({ model, isPreview: false, photoUrls: annotatedPhotoUrls, beneficiarySignatureUrl: model.beneficiarySignatureUrl, driverSignatureUrl: model.driverSignatureUrl, stampAvailable: true });
         showToast('Proces verbal salvat in istoric.');
-        await openPrintPreview({
+        const previewResult = await openPrintPreview({
           html,
           title: 'Proces Verbal salvat',
           suggestedFileName: fileName,
@@ -819,7 +819,19 @@ export async function openProcessVerbalForm({ driver, car, depot, processType })
               blob
             );
           },
+          // Daca soferul apasa Inapoi de pe acest preview (dupa salvare),
+          // stergem inregistrarea local-salvata ca sa nu ramana un PV
+          // gresit/gol in Istoric — vezi comentariul din openPrintPreview().
+          onEditAgain: async () => {
+            await PvRepo.remove(id);
+          },
         });
+        if (previewResult && previewResult.editAgain) {
+          // Ramanem pe ecranul de formular (inca plin cu datele soferului)
+          // ca sa corecteze direct, in loc sa inchidem ecranul ca la o
+          // salvare normala.
+          return;
+        }
         pop({ saved: true });
       } catch (e) {
         console.error(e);

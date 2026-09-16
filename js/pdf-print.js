@@ -21,7 +21,7 @@ import { CONDITIONS_BY_TYPE, COMPANY_INFO, confirmationBanner } from './catalog-
 import { displayPvNumber, displayAvizNumber } from './pv-numbering.js';
 import { pushScreen } from './router.js';
 import { el } from './utils.js';
-import { showToast } from './components.js';
+import { showToast, confirmDialog } from './components.js';
 import { generateDocumentPdfBlob, downloadPdf, shareOrDownloadPdf } from './pdf-generate.js';
 
 const NA = 'N/A';
@@ -534,8 +534,18 @@ export async function printDocument(html, suggestedTitle) {
 /**
  * Ecran de previzualizare in-app a documentului, scalat sa incapa pe
  * telefon, cu buton pentru a deschide dialogul de tiparire/salvare PDF.
+ * Documentul (NU restul ecranului — bara de sus/jos raman fixe) poate fi
+ * marit prin ciupire (pinch) sau dublu-tap, ca soferul sa poata verifica
+ * detalii mici fara sa piarda accesul la butonul Inapoi.
+ * @param {() => Promise<void>|void} [onEditAgain] Cand e dat, butonul
+ *   "Inapoi" cere confirmare si il apeleaza inainte sa inchida ecranul —
+ *   folosit de ecranul de PV DUPA ce PV-ul a fost deja salvat (are numar
+ *   real, e deja in istoric), ca sa stearga acea inregistrare inainte sa se
+ *   intoarca la formular, evitand un PV gol/gresit ramas in istoric daca
+ *   soferul revine sa corecteze ceva. Omis la preview-ul DINAINTE de
+ *   salvare (onPreview()), unde nu exista nimic de sters.
  */
-export async function openPrintPreview({ html, title = 'Previzualizare document', suggestedFileName, showBadge = false, onConfirmPrint, onPdfReady }) {
+export async function openPrintPreview({ html, title = 'Previzualizare document', suggestedFileName, showBadge = false, onConfirmPrint, onPdfReady, onEditAgain }) {
   // Fiecare .doc-page e mutata intr-un "frame" care primeste dimensiunile
   // FINALE (scalate) prin JS, ca layout-ul normal (centrare, spatiere) sa
   // functioneze corect indiferent de transform-ul aplicat paginii interioare.
@@ -559,8 +569,27 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
 
   return pushScreen(({ pop }) => {
     const screen = el('div', { class: 'preview-screen' });
+    async function handleBack() {
+      if (onEditAgain) {
+        const ok = await confirmDialog({
+          title: 'Editezi din nou?',
+          message: 'PV-ul a fost deja salvat in istoric. Ca sa nu ramana o inregistrare gresita/goala acolo, cea salvata acum va fi stearsa — dupa ce corectezi, apasa din nou Salveaza.',
+          okLabel: 'Da, editez',
+          cancelLabel: 'Ramai aici',
+        });
+        if (!ok) return;
+        await onEditAgain();
+        // Distinct de un pop normal (undefined) — apelantul (onSave() din
+        // screens-pv-form.js) foloseste asta ca sa STEA pe ecranul de
+        // formular (deja completat) in loc sa il inchida si el, ca soferul
+        // sa poata corecta direct si apasa din nou Salveaza.
+        pop({ editAgain: true });
+        return;
+      }
+      pop(undefined);
+    }
     const topBar = el('div', { class: 'topbar' }, [
-      el('button', { class: 'icon-btn', onclick: () => pop(undefined) }, ['←']),
+      el('button', { class: 'icon-btn', onclick: handleBack }, ['←']),
       el('div', { class: 'topbar-title' }, [title]),
     ]);
     screen.appendChild(topBar);
@@ -578,7 +607,9 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     });
     measureHost.remove();
 
-    const scroller = el('div', { class: 'preview-scroller' }, [pagesHost]);
+    const zoomResetBtn = el('button', { class: 'preview-zoom-reset', onclick: () => setZoom(1, 0, 0) }, ['✕  100%']);
+    const zoomHint = el('div', { class: 'preview-zoom-hint' }, ['Ciupeste documentul ca sa il maresti']);
+    const scroller = el('div', { class: 'preview-scroller' }, [pagesHost, zoomResetBtn, zoomHint]);
     screen.appendChild(scroller);
 
     function applyScale() {
@@ -592,6 +623,154 @@ export async function openPrintPreview({ html, title = 'Previzualizare document'
     }
     requestAnimationFrame(applyScale);
     window.addEventListener('resize', applyScale);
+
+    // ---------------- zoom / pan scopit STRICT la document ----------------
+    // Marim/panoram DOAR .preview-pages (documentul din interiorul
+    // scroller-ului) — niciodata bara de sus (butonul Inapoi) sau bara de
+    // jos (Printeaza/Salveaza/Trimite), care raman intotdeauna la marime
+    // normala si usor de apasat, oricat de mult a marit soferul documentul
+    // ca sa verifice un detaliu (vezi si touch-action:pan-y pe
+    // .preview-scroller in styles.css, care lasa scroll-ul vertical normal
+    // pe mana browserului cat timp nu suntem zoomati, dar ne lasa noua,
+    // exclusiv, gestul cu 2 degete).
+    const MIN_ZOOM = 1;
+    const MAX_ZOOM = 4;
+    let zoom = 1;
+    let panX = 0;
+    let panY = 0;
+
+    function clampPan(z, x, y) {
+      const cw = scroller.clientWidth;
+      const ch = scroller.clientHeight;
+      const contentW = cw * z;
+      const contentH = pagesHost.scrollHeight * z; // scrollHeight e neafectat de transform (CSS)
+      const minX = Math.min(0, cw - contentW);
+      const minY = Math.min(0, ch - contentH);
+      return { x: Math.min(0, Math.max(minX, x)), y: Math.min(0, Math.max(minY, y)) };
+    }
+
+    function setZoom(z, x, y) {
+      zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+      if (zoom <= 1.001) {
+        zoom = 1;
+        panX = 0;
+        panY = 0;
+      } else {
+        const clamped = clampPan(zoom, x, y);
+        panX = clamped.x;
+        panY = clamped.y;
+      }
+      pagesHost.style.transform = zoom === 1 ? '' : `translate(${panX}px, ${panY}px) scale(${zoom})`;
+      scroller.classList.toggle('zoomed', zoom > 1);
+    }
+
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    function localPoint(clientX, clientY) {
+      const rect = scroller.getBoundingClientRect();
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    const activePointers = new Map(); // pointerId -> {x,y}, coordonate locale scroller
+    let pinch = null; // {startDist, startZoom, startMid, startPan}
+    let singlePan = null; // {startX, startY, startPanX, startPanY}
+    let lastTap = null; // {time, x, y}
+
+    function startSinglePan(p) {
+      singlePan = { startX: p.x, startY: p.y, startPanX: panX, startPanY: panY };
+    }
+
+    function onPointerDown(e) {
+      // Butonul de reset zoom sta in interiorul .preview-scroller (ca sa
+      // poata fi pozitionat peste document) — daca am captura pointerul aici
+      // ca la un gest normal, click-ul pe buton ar fi "furat" de scroller
+      // (setPointerCapture re-directioneaza si evenimentul click ulterior
+      // catre elementul care are capture-ul, nu catre buton). Il excludem.
+      if (e.target.closest && e.target.closest('.preview-zoom-reset')) return;
+      // setPointerCapture poate arunca eroare in unele situatii (ex. tip de
+      // pointer neobisnuit) — nu lasam asta sa opreasca urmarirea gestului.
+      try {
+        scroller.setPointerCapture?.(e.pointerId);
+      } catch (err) {
+        /* ignoram — urmarirea prin activePointers functioneaza si fara capture */
+      }
+      activePointers.set(e.pointerId, localPoint(e.clientX, e.clientY));
+      if (activePointers.size === 2) {
+        singlePan = null;
+        const pts = Array.from(activePointers.values());
+        pinch = { startDist: Math.max(1, dist(pts[0], pts[1])), startZoom: zoom, startMid: mid(pts[0], pts[1]), startPan: { x: panX, y: panY } };
+      } else if (activePointers.size === 1 && zoom > 1) {
+        pinch = null;
+        startSinglePan(localPoint(e.clientX, e.clientY));
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, localPoint(e.clientX, e.clientY));
+      if (pinch && activePointers.size === 2) {
+        e.preventDefault();
+        const pts = Array.from(activePointers.values());
+        const newDist = dist(pts[0], pts[1]);
+        const newMid = mid(pts[0], pts[1]);
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pinch.startZoom * (newDist / pinch.startDist)));
+        // ancoram punctul de continut aflat sub degete la inceputul
+        // gestului, ca sa ramana sub degete pe tot parcursul (zoom+pan simultan)
+        const contentPoint = { x: (pinch.startMid.x - pinch.startPan.x) / pinch.startZoom, y: (pinch.startMid.y - pinch.startPan.y) / pinch.startZoom };
+        setZoom(newZoom, newMid.x - contentPoint.x * newZoom, newMid.y - contentPoint.y * newZoom);
+      } else if (singlePan && activePointers.size === 1) {
+        e.preventDefault();
+        const p = localPoint(e.clientX, e.clientY);
+        setZoom(zoom, singlePan.startPanX + (p.x - singlePan.startX), singlePan.startPanY + (p.y - singlePan.startY));
+      }
+    }
+
+    function onPointerUp(e) {
+      // Simetric cu excluderea din onPointerDown — daca acest pointer nu a
+      // fost retinut acolo (ex. a pornit pe butonul de reset zoom), nu are
+      // ce sa "ridicam" aici; altfel am putea declansa gresit un dublu-tap.
+      if (!activePointers.has(e.pointerId)) return;
+      const wasSinglePointer = activePointers.size === 1;
+      activePointers.delete(e.pointerId);
+      if (activePointers.size < 2) pinch = null;
+      if (activePointers.size === 1 && zoom > 1) {
+        // ramane un deget jos dupa ce s-a ridicat celalalt din ciupit —
+        // continuam panoramarea lin, fara sa astepte un gest nou
+        startSinglePan(Array.from(activePointers.values())[0]);
+      } else if (activePointers.size === 0) {
+        singlePan = null;
+        if (wasSinglePointer) {
+          // dublu-tap: revenire la 1x daca eram zoomati, altfel marire
+          // ancorata pe punctul atins — utila pentru cine nu incearca
+          // ciupitul din prima.
+          const now = Date.now();
+          const p = localPoint(e.clientX, e.clientY);
+          if (lastTap && now - lastTap.time < 320 && dist(lastTap, p) < 30) {
+            lastTap = null;
+            if (zoom > 1) {
+              setZoom(1, 0, 0);
+            } else {
+              const targetZoom = 2.5;
+              setZoom(targetZoom, p.x * (1 - targetZoom), p.y * (1 - targetZoom));
+            }
+          } else {
+            lastTap = { time: now, x: p.x, y: p.y };
+          }
+        }
+      }
+    }
+
+    scroller.addEventListener('pointerdown', onPointerDown);
+    scroller.addEventListener('pointermove', onPointerMove);
+    scroller.addEventListener('pointerup', onPointerUp);
+    scroller.addEventListener('pointercancel', onPointerUp);
+
+    // Indiciu discret, o singura data, ca soferul sa stie ca poate ciupi
+    // documentul ca sa il mareasca — dispare singur dupa cateva secunde.
+    requestAnimationFrame(() => {
+      zoomHint.classList.add('visible');
+      setTimeout(() => zoomHint.classList.remove('visible'), 2500);
+    });
 
     const fileNameBase = suggestedFileName || fileToken(title) || 'Proces-Verbal';
     // Generam PDF-ul o singura data si il refolosim daca soferul apasa mai
