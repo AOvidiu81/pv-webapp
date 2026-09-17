@@ -104,8 +104,24 @@ function rasterizePageToJpeg(pageEl, naturalWidth, naturalHeight, cssText, scale
 }
 
 /** Randeaza toate paginile ".doc-page" dintr-un fragment HTML de document ca
- * o lista de { bytes, width, height } JPEG. */
-export async function renderDocPagesToJpegs(html, { scale = 1.6, quality = 0.85 } = {}) {
+ * o lista de { bytes, width, height } JPEG.
+ * scale=1.6 insemna ~154 DPI pentru o pagina A4 (210mm) — vizibil sub cat
+ * arata pagina "in viu" in preview-ul din aplicatie (randare HTML/CSS
+ * directa, fara aceasta rasterizare) sau la tiparirea reala din browser
+ * (window.print(), tot pe HTML/CSS direct). Diferenta era mai vizibila la
+ * semnatura (linii subtiri, curbate) decat la text/tabele — de-aia parea
+ * "clara la semnat, pixelata in PV": abia AICI, la salvare/trimitere/
+ * incarcare in cloud (singurele cai care trec prin acest fisier), pagina
+ * intreaga (deci si semnatura deja incorporata in ea ca imagine) era
+ * comprimata la o rezolutie mult mai mica. Ridicat la ~240 DPI (scale 2.5)
+ * si calitate JPEG mai mare, ca linia de cerneala sa nu mai iasa cu artefacte
+ * de compresie ("in trepte") — cost: fisiere PDF putin mai mari (inca
+ * rezonabile pentru trimis pe WhatsApp/email) si randare cu cateva sute de
+ * ms mai lenta per pagina (nu se simte, generarea porneste oricum din timp,
+ * inainte sa apese soferul butonul de trimis — vezi getPdfBlob() in
+ * pdf-print.js).
+ */
+export async function renderDocPagesToJpegs(html, { scale = 2.5, quality = 0.92 } = {}) {
   const host = document.createElement('div');
   host.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;left:-99999px;top:0;';
   host.innerHTML = html;
